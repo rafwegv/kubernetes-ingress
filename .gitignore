@@ -47,3 +47,5 @@ hack/controller-gen-*
 
 # Ignore local docs dependencies
 docs-web/.netlify/state.json
+site/
+venv/
