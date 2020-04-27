@@ -60,7 +60,7 @@ spec:
 {{ toYaml .Values.controller.resources | indent 10 }}
         securityContext:
           allowPrivilegeEscalation: true
-          runAsUser: 101 #nginx
+          runAsUser: 999 #nginx
           capabilities:
             drop:
             - ALL

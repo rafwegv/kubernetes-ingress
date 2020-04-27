@@ -1,0 +1,45 @@
+FROM centos:7.4.1708
+
+ARG RELEASE
+COPY appprotect.repo /etc/yum.repos.d/app-protect.repo
+RUN yum install -y epel-release
+RUN yum install -y app-protect
+
+RUN rm -rf /etc/nginx/nginx.conf
+
+
+RUN  mkdir -p /var/lib/nginx \
+  && mkdir -p /etc/nginx/secrets \
+  && mkdir -p /etc/nginx/waf \
+  && mkdir -p /var/log/f5waf \
+  && mkdir -p /opt/f5waf \
+  && chown -R nginx:nginx /etc/nginx/secrets \
+  && chown -R nginx:nginx /etc/nginx/waf \
+  && chown -R nginx:nginx /etc/nginx \
+  && chown -R nginx:nginx /var/cache/nginx \
+  && chown -R nginx:nginx /var/lib/nginx/ \
+  && chown -R nginx:nginx /var/log/f5waf/ \
+  && chown -R nginx:nginx /opt/f5waf/ \
+  && chown -R nginx:nginx /var/log/nginx/ \
+  && rm /etc/nginx/conf.d/*
+
+COPY log-default.json /etc/nginx
+RUN chown nginx:nginx /etc/nginx/log-default.json
+
+
+COPY nginx-ingress /
+COPY internal/configs/version1/nginx-plus.ingress.tmpl /
+COPY internal/configs/version1/nginx-plus.tmpl /
+COPY internal/configs/version2/nginx-plus.virtualserver.tmpl  /
+#COPY waf-policy.json /etc/nginx/waf
+#RUN chown nginx:nginx /etc/nginx/waf/waf-policy.json
+
+# Uncomment the line below if you would like to add the default.pem to the image
+# and use it as a certificate and key for the default server
+# ADD default.pem /etc/nginx/secrets/default
+
+ADD protect_start.sh /
+RUN chmod +x /protect_start.sh
+RUN setcap cap_net_bind_service=+ep /usr/sbin/nginx 
+
+ENTRYPOINT ["/protect_start.sh"]

@@ -15,7 +15,9 @@ pid        /var/lib/nginx/nginx.pid;
 {{- if .OpenTracingLoadModule}}
 load_module modules/ngx_http_opentracing_module.so;
 {{- end}}
-
+{{- if .AppProtectLoadModule}}
+load_module modules/ngx_http_app_protect_module.so;
+{{- end}}
 {{- if .MainSnippets}}
 {{range $value := .MainSnippets}}
 {{$value}}{{end}}
@@ -48,6 +50,12 @@ http {
     access_log  /var/log/nginx/access.log  main;
     {{end}}
 
+    {{- if .AppProtectLoadModule}}
+    {{if .AppProtectFailureModeAction}}app_protect_failure_mode_action {{.AppProtectFailureModeAction}};{{end}}
+    {{if .AppProtectCookieSeed}}app_protect_cookie_seed {{.AppProtectCookieSeed}};{{end}}
+    {{if .AppProtectCPUThresholds}}app_protect_cpu_thresholds {{.AppProtectCPUThresholds}};{{end}}
+	{{if .AppProtectPhysicalMemoryThresholds}}app_protect_physical_memory_util_thresholds {{.AppProtectPhysicalMemoryThresholds}};{{end}}
+    {{- end}}
     sendfile        on;
     #tcp_nopush     on;
 
@@ -91,8 +99,8 @@ http {
         # required to support the Websocket protocol in VirtualServer/VirtualServerRoutes
         set $default_connection_header "";
 
-        listen 80 default_server{{if .ProxyProtocol}} proxy_protocol{{end}};
-        listen 443 ssl default_server{{if .HTTP2}} http2{{end}}{{if .ProxyProtocol}} proxy_protocol{{end}};
+        listen 8080 default_server{{if .ProxyProtocol}} proxy_protocol{{end}};
+        listen 8443 ssl default_server{{if .HTTP2}} http2{{end}}{{if .ProxyProtocol}} proxy_protocol{{end}};
 
         ssl_certificate /etc/nginx/secrets/default;
         ssl_certificate_key /etc/nginx/secrets/default;
@@ -100,7 +108,6 @@ http {
         server_name _;
         server_tokens "{{.ServerTokens}}";
         access_log off;
-
         {{if .OpenTracingEnabled}}
         opentracing off;
         {{end}}

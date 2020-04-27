@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/dynamic"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
@@ -187,6 +188,7 @@ func main() {
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(config)
+	dynClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		glog.Fatalf("Failed to create client: %v.", err)
 	}
@@ -387,10 +389,14 @@ func main() {
 	lbcInput := k8s.NewLoadBalancerControllerInput{
 		KubeClient:                kubeClient,
 		ConfClient:                confClient,
+		DynClient:                 dynClient,
 		ResyncPeriod:              30 * time.Second,
 		Namespace:                 *watchNamespace,
 		NginxConfigurator:         cnf,
+		AppProtectLogConfFolder:   "/etc/nginx/waf/nac-logconfs/"  ,
+		AppProtectPolicyFolder:    "/etc/nginx/waf/nac-policies/",
 		DefaultServerSecret:       *defaultServerSecret,
+		AppProtectEnabled:          ngxConfig.AppProtectLoadModule,
 		IsNginxPlus:               *nginxPlus,
 		IngressClass:              *ingressClass,
 		UseIngressClassOnly:       *useIngressClassOnly,

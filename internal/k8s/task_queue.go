@@ -7,6 +7,7 @@ import (
 	"github.com/golang/glog"
 	conf_v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
@@ -48,7 +49,7 @@ func (tq *taskQueue) Enqueue(obj interface{}) {
 
 	task, err := newTask(key, obj)
 	if err != nil {
-		glog.V(3).Infof("Couldn't create a task for object %v: %v", obj, err)
+		glog.V(1).Infof("Couldn't create a task for object %v: %v", obj, err)
 		return
 	}
 
@@ -112,6 +113,10 @@ const (
 	virtualserver
 	// virtualServeRoute resource
 	virtualServerRoute
+	// appprotectpolicy resource
+	appProtectPolicy
+	// appProtectlogconf resource
+	appProtectLogConf
 )
 
 // task is an element of a taskQueue
@@ -143,6 +148,14 @@ func newTask(key string, obj interface{}) (task, error) {
 		k = virtualserver
 	case *conf_v1.VirtualServerRoute:
 		k = virtualServerRoute
+	case *unstructured.Unstructured:
+		if _kind := obj.(*unstructured.Unstructured).GetKind(); _kind == wafconfigGVK.Kind {
+			k = appProtectPolicy
+		} else if _kind == waflogconfigGVK.Kind {
+            k = appProtectLogConf
+		} else {
+			return task{}, fmt.Errorf("Unknow unstructured kind: %v", _kind)
+		}
 	default:
 		return task{}, fmt.Errorf("Unknow type: %v", t)
 	}

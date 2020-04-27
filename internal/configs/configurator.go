@@ -653,3 +653,8 @@ func (cnf *Configurator) GetVirtualServerCounts() (vsCount int, vsrCount int) {
 
 	return vsCount, vsrCount
 }
+
+// ReoladOnAppProtectPolicyUpdate gets called from controller when an AppProtect policy was updated
+func (cnf *Configurator) ReoladOnAppProtectPolicyUpdate() error {
+	return cnf.nginxManager.Reload()
+}

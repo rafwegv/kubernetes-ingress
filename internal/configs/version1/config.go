@@ -84,6 +84,10 @@ type Server struct {
 
 	Ports    []int
 	SSLPorts []int
+	AppProtectEnable     bool
+	AppProtectPolicy     string
+	AppProtectLogConf             string
+	AppProtectLogEnable           bool
 }
 
 // JWTRedirectLocation describes a location for redirecting client requests to a login URL for JWT Authentication.
@@ -163,6 +167,11 @@ type MainConfig struct {
 	OpenTracingEnabled             bool
 	OpenTracingTracer              string
 	OpenTracingTracerConfig        string
+	AppProtectLoadModule          bool
+	AppProtectFailureModeAction   string
+	AppProtectCookieSeed          string
+	AppProtectCPUThresholds       string
+    AppProtectPhysicalMemoryThresholds string
 }
 
 // NewUpstreamWithDefaultServer creates an upstream with the default server.

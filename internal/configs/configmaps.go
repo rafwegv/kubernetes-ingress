@@ -423,6 +423,43 @@ func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool) *ConfigParams {
 		}
 	}
 
+	if appProtectLoadModule, exists, err := GetMapKeyAsBool( cfgm.Data, "AppProtect", cfgm); exists {
+		if err != nil {
+			glog.Error(err)
+		} else {
+			cfgParams.AppProtectLoadModule = appProtectLoadModule
+		}
+	
+	}
+	if appProtectFailureModeAction, exists := cfgm.Data["app_protect_failure_mode_action"]; exists {
+		if appProtectFailureModeAction == "pass" || appProtectFailureModeAction == "drop" {
+		cfgParams.AppProtectFailureModeAction = appProtectFailureModeAction
+		} else {
+			glog.Error("ConfigMap Key 'app_protect_failure_mode_action' must have value 'pass' or 'drop'. Ignoring.")
+		}
+	}
+	
+	if appProtectCookieSeed, exists := cfgm.Data["app_protect_cookie_seed"]; exists {
+		cfgParams.AppProtectCookieSeed = appProtectCookieSeed
+	}
+	
+	if appProtectCPUThresholds, exists := cfgm.Data["app_protect_cpu_thresholds"]; exists {
+		if VerifyThresholds(appProtectCPUThresholds) {
+		cfgParams.AppProtectCPUThresholds = appProtectCPUThresholds
+		} else {
+			glog.Error("ConfigMap Key 'app_protect_cpu_thresholds' must follow pattern: 'high=<number_0-100> low=<number_0-100>'. Ignoring.")
+		}
+	}
+	
+	if appProtectPhysicalMemoryThresholds, exists := cfgm.Data["app_protect_physical_memory_util_thresholds"]; exists {
+		cfgParams.AppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
+		if VerifyThresholds(appProtectPhysicalMemoryThresholds) {
+			cfgParams.AppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
+			} else {
+				glog.Error("ConfigMap Key 'app_protect_physical_memory_thresholds' must follow pattern: 'high=<number_0-100> low=<number_0-100>'. Ignoring.")
+			}	
+	}	
+
 	return cfgParams
 }
 
@@ -468,6 +505,11 @@ func GenerateNginxMainConfig(staticCfgParams *StaticConfigParams, config *Config
 		OpenTracingEnabled:             config.MainOpenTracingEnabled,
 		OpenTracingTracer:              config.MainOpenTracingTracer,
 		OpenTracingTracerConfig:        config.MainOpenTracingTracerConfig,
+		AppProtectLoadModule:           config.AppProtectLoadModule,
+		AppProtectFailureModeAction:    config.AppProtectFailureModeAction,
+		AppProtectCookieSeed:           config.AppProtectCookieSeed,
+		AppProtectCPUThresholds:        config.AppProtectCPUThresholds,
+		AppProtectPhysicalMemoryThresholds: config.AppProtectPhysicalMemoryThresholds,
 	}
 	return nginxCfg
 }

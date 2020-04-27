@@ -60,8 +60,17 @@ type ConfigParams struct {
 	MainOpenTracingEnabled        bool
 	MainOpenTracingTracer         string
 	MainOpenTracingTracerConfig   string
+	AppProtectLoadModule		  bool
+	AppProtectEnable              bool
+	AppProtectPolicy              string
+	AppProtectLogConf             string
+	AppProtectLogEnable           bool
+	AppProtectFailureModeAction   string
+	AppProtectCookieSeed          string
+	AppProtectCPUThresholds       string
+    AppProtectPhysicalMemoryThresholds string
 
-	RealIPHeader    string
+ 	RealIPHeader    string
 	SetRealIPFrom   []string
 	RealIPRecursive bool
 

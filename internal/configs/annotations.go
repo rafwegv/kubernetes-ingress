@@ -23,17 +23,21 @@ var masterBlacklist = map[string]bool{
 }
 
 var minionBlacklist = map[string]bool{
-	"nginx.org/proxy-hide-headers":       true,
-	"nginx.org/proxy-pass-headers":       true,
-	"nginx.org/redirect-to-https":        true,
-	"ingress.kubernetes.io/ssl-redirect": true,
-	"nginx.org/hsts":                     true,
-	"nginx.org/hsts-max-age":             true,
-	"nginx.org/hsts-include-subdomains":  true,
-	"nginx.org/server-tokens":            true,
-	"nginx.org/listen-ports":             true,
-	"nginx.org/listen-ports-ssl":         true,
-	"nginx.org/server-snippets":          true,
+	"nginx.org/proxy-hide-headers":                      true,
+	"nginx.org/proxy-pass-headers":                      true,
+	"nginx.org/redirect-to-https":                       true,
+	"ingress.kubernetes.io/ssl-redirect":                true,
+	"nginx.org/hsts":                                    true,
+	"nginx.org/hsts-max-age":                            true,
+	"nginx.org/hsts-include-subdomains":                 true,
+	"nginx.org/server-tokens":                           true,
+	"nginx.org/listen-ports":                            true,
+	"nginx.org/listen-ports-ssl":                        true,
+	"nginx.org/server-snippets":                         true,
+	"appprotect.f5.com/app_protect_enable":              true,
+	"appprotect.f5.com/app_protect_policy":              true,
+	"appprotect.f5.com/app_protect_security_log_enable": true,
+	"appprotect.f5.com/app_protect_security_log":        true,
 }
 
 var minionInheritanceList = map[string]bool{
@@ -306,6 +310,29 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 
 	if failTimeout, exists := ingEx.Ingress.Annotations["nginx.org/fail-timeout"]; exists {
 		cfgParams.FailTimeout = failTimeout
+	}
+
+	if appProtectEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_enable"]; exists {
+		if strings.Contains(appProtectEnable, "on") {
+			cfgParams.AppProtectEnable = true
+		} else {
+			cfgParams.AppProtectEnable = false
+		}
+	}
+	if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_policy"]; exists {
+		cfgParams.AppProtectPolicy = appProtectPolicy
+	}
+
+	if appProtectLogEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log_enable"]; exists {
+		if strings.Contains(appProtectLogEnable, "on") {
+			cfgParams.AppProtectLogEnable = true
+		} else {
+			cfgParams.AppProtectLogEnable = false
+		}
+	}
+
+	if appProtectLogConf, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log"]; exists {
+		cfgParams.AppProtectLogConf = appProtectLogConf
 	}
 
 	return cfgParams

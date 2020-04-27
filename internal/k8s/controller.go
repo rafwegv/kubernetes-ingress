@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"os"
+	"io/ioutil"
+	"encoding/json"
 
 	"github.com/golang/glog"
 
@@ -31,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	//"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	core_v1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -46,10 +50,38 @@ import (
 	api_v1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 )
 
 const (
 	ingressClassKey = "kubernetes.io/ingress.class"
+)
+var (
+    wafconfigGVR = schema.GroupVersionResource{
+		Group:   "appprotect.f5.com",
+		Version: "v1beta1",
+		Resource: "appolicies",
+	}
+	wafconfigGVK = schema.GroupVersionKind{
+		Group:   "appprotect.f5.com",
+		Version: "v1beta1",
+		Kind: "APPolicy",
+	}
+	waflogconfigGVR = schema.GroupVersionResource{
+		Group:   "appprotect.f5.com",
+		Version: "v1beta1",
+		Resource: "aplogconfs",
+	}
+	waflogconfigGVK = schema.GroupVersionKind{
+		Group:   "appprotect.f5.com",
+		Version: "v1beta1",
+		Kind: "APLogConf",
+	}
+
 )
 
 // LoadBalancerController watches Kubernetes API and
@@ -57,6 +89,7 @@ const (
 type LoadBalancerController struct {
 	client                       kubernetes.Interface
 	confClient                   k8s_nginx.Interface
+	dynClient                    dynamic.Interface
 	ingressController            cache.Controller
 	svcController                cache.Controller
 	endpointController           cache.Controller
@@ -65,6 +98,9 @@ type LoadBalancerController struct {
 	virtualServerController      cache.Controller
 	virtualServerRouteController cache.Controller
 	podController                cache.Controller
+	dynInformerFactory           dynamicinformer.DynamicSharedInformerFactory 
+	appProtectPolicyInformer     cache.SharedIndexInformer
+	appProtectLogConfInformer    cache.SharedIndexInformer
 	ingressLister                storeToIngressLister
 	svcLister                    cache.Store
 	endpointLister               storeToEndpointLister
@@ -73,11 +109,16 @@ type LoadBalancerController struct {
 	secretLister                 storeToSecretLister
 	virtualServerLister          cache.Store
 	virtualServerRouteLister     cache.Store
+	appProtectPolicyLister		 cache.Store
+	appProtectLogConfLister	     cache.Store			
 	syncQueue                    *taskQueue
 	ctx                          context.Context
 	cancel                       context.CancelFunc
 	configurator                 *configs.Configurator
+	appProtectPolicyFolder		 string
+	appProtectLogConfFolder	     string		
 	watchNginxConfigMaps         bool
+	appProtectEnabled            bool
 	isNginxPlus                  bool
 	recorder                     record.EventRecorder
 	defaultServerSecret          string
@@ -102,10 +143,14 @@ var keyFunc = cache.DeletionHandlingMetaNamespaceKeyFunc
 type NewLoadBalancerControllerInput struct {
 	KubeClient                kubernetes.Interface
 	ConfClient                k8s_nginx.Interface
+	DynClient                 dynamic.Interface
 	ResyncPeriod              time.Duration
 	Namespace                 string
 	NginxConfigurator         *configs.Configurator
+	AppProtectPolicyFolder    string
+	AppProtectLogConfFolder   string
 	DefaultServerSecret       string
+	AppProtectEnabled         bool
 	IsNginxPlus               bool
 	IngressClass              string
 	UseIngressClassOnly       bool
@@ -125,8 +170,12 @@ func NewLoadBalancerController(input NewLoadBalancerControllerInput) *LoadBalanc
 	lbc := &LoadBalancerController{
 		client:                    input.KubeClient,
 		confClient:                input.ConfClient,
+		dynClient:                 input.DynClient,
 		configurator:              input.NginxConfigurator,
+		appProtectPolicyFolder:	   input.AppProtectPolicyFolder,
+		appProtectLogConfFolder:   input.AppProtectLogConfFolder,
 		defaultServerSecret:       input.DefaultServerSecret,
+		appProtectEnabled:         input.AppProtectEnabled,
 		isNginxPlus:               input.IsNginxPlus,
 		ingressClass:              input.IngressClass,
 		useIngressClassOnly:       input.UseIngressClassOnly,
@@ -167,7 +216,10 @@ func NewLoadBalancerController(input NewLoadBalancerControllerInput) *LoadBalanc
 	lbc.addServiceHandler(createServiceHandlers(lbc))
 	lbc.addEndpointHandler(createEndpointHandlers(lbc))
 	lbc.addPodHandler()
-
+	lbc.dynInformerFactory = dynamicinformer.NewDynamicSharedInformerFactory(lbc.dynClient, input.ResyncPeriod)
+	lbc.AddappProtectPolicyHandler(createAppProtectConfigHandlerfuncs(lbc))
+	lbc.AddappProtectLogConfHandler(createAppProtectLogConfHandlerfuncs(lbc))
+	
 	if lbc.areCustomResourcesEnabled {
 		lbc.addVirtualServerHandler(createVirtualServerHandlers(lbc))
 		lbc.addVirtualServerRouteHandler(createVirtualServerRouteHandlers(lbc))
@@ -209,6 +261,19 @@ func (lbc *LoadBalancerController) addLeaderHandler(leaderHandler leaderelection
 // AddSyncQueue enqueues the provided item on the sync queue
 func (lbc *LoadBalancerController) AddSyncQueue(item interface{}) {
 	lbc.syncQueue.Enqueue(item)
+}
+// AddappProtectPolicyHandler create dynamic informers for custom appprotect policy resource
+func (lbc *LoadBalancerController) AddappProtectPolicyHandler(handlers cache.ResourceEventHandlerFuncs) {
+	lbc.appProtectPolicyInformer = lbc.dynInformerFactory.ForResource(wafconfigGVR).Informer()
+	lbc.appProtectPolicyLister = lbc.appProtectPolicyInformer.GetStore()
+	lbc.appProtectPolicyInformer.AddEventHandler(handlers)
+}
+
+// AddappProtectLogConfHandler create dynamic informer for custom appprotect logging config resource
+func (lbc *LoadBalancerController) AddappProtectLogConfHandler(handlers cache.ResourceEventHandlerFuncs) {
+	lbc.appProtectLogConfInformer = lbc.dynInformerFactory.ForResource(waflogconfigGVR).Informer()
+	lbc.appProtectLogConfLister = lbc.appProtectLogConfInformer.GetStore()
+	lbc.appProtectLogConfInformer.AddEventHandler(handlers)
 }
 
 // addSecretHandler adds the handler for secrets to the controller
@@ -324,7 +389,15 @@ func (lbc *LoadBalancerController) addVirtualServerRouteHandler(handlers cache.R
 // Run starts the loadbalancer controller
 func (lbc *LoadBalancerController) Run() {
 	lbc.ctx, lbc.cancel = context.WithCancel(context.Background())
-
+	if lbc.appProtectEnabled {
+		go lbc.dynInformerFactory.Start(lbc.ctx.Done())
+		go lbc.syncQueue.Run(time.Second, lbc.ctx.Done())
+	// Wait for the appProtect related caches to sync, which should give enough time for the files to be written,
+	// preventing potential race conditions
+		if ok := cache.WaitForCacheSync(lbc.ctx.Done(), lbc.appProtectLogConfInformer.HasSynced, lbc.appProtectPolicyInformer.HasSynced); !ok {
+			glog.Error("failed to wait for caches to sync")
+		}
+	}
 	if lbc.leaderElector != nil {
 		go lbc.leaderElector.Run(lbc.ctx)
 	}
@@ -339,8 +412,7 @@ func (lbc *LoadBalancerController) Run() {
 	if lbc.areCustomResourcesEnabled {
 		go lbc.virtualServerController.Run(lbc.ctx.Done())
 		go lbc.virtualServerRouteController.Run(lbc.ctx.Done())
-	}
-	go lbc.syncQueue.Run(time.Second, lbc.ctx.Done())
+	}	
 	<-lbc.ctx.Done()
 }
 
@@ -611,6 +683,10 @@ func (lbc *LoadBalancerController) sync(task task) {
 	case virtualServerRoute:
 		lbc.syncVirtualServerRoute(task)
 		lbc.updateVirtualServerMetrics()
+	case appProtectPolicy:
+		lbc.syncAppProtectPolicy(task)
+	case appProtectLogConf:
+		lbc.syncAppProtectLogConf(task)		
 	}
 }
 
@@ -2105,4 +2181,104 @@ func (lbc *LoadBalancerController) createMergableIngresses(master *extensions.In
 
 func formatWarningMessages(w []string) string {
 	return strings.Join(w, "; ")
+}
+
+func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
+	key := task.Key
+	glog.V(3).Infof("Syncing AppProtectPolicy %v", key)
+	obj, polexists, err := lbc.appProtectPolicyLister.GetByKey(key)
+	if ! polexists {
+		glog.V(3).Infof("Deleting AppProtectPolicy %v", key)
+		err = deleteFile(lbc.appProtectPolicyFolder, key)
+		if inUse, ingName := lbc.isAppProtectPolicyInUse(key); inUse {
+		   err = fmt.Errorf("WARNING! AppProtectPolicy %s deleted but in use in %s", key,  ingName)  
+		   lbc.syncQueue.RequeueAfter(task, err, 5*time.Second)
+		}
+	} 	else {
+		glog.V(3).Infof("Adding/Updating AppProtectPolicy %v", key)	
+		reload, err := writeToFile(lbc.appProtectPolicyFolder, obj.(*unstructured.Unstructured))
+		if err != nil {
+			glog.V(3).Infof("Error Syncing policy %v", key)
+		}
+		if reload {
+			lbc.configurator.ReoladOnAppProtectPolicyUpdate()
+		}
+	}
+	if err != nil {
+		glog.V(3).Infof("Error Syncing policy %v", key)
+	}
+}
+
+func writeToFile(napconfigFolder string, resource *unstructured.Unstructured) (bool, error) {
+	spec, found, err := unstructured.NestedMap(resource.Object, "spec")
+		reload := true
+		if ! found {
+			return false, err
+		}
+		data, err := json.Marshal(spec)
+		if err != nil {
+			return false, err
+		}
+		os.MkdirAll(napconfigFolder + resource.GetNamespace(), 0755)
+		filename := napconfigFolder + resource.GetNamespace() + "/" + resource.GetName()
+		_, err = os.Stat(filename) 
+		if os.IsNotExist(err) {
+			reload = false
+		}
+		glog.V(3).Infof("Writing %s\n", filename)
+		err = ioutil.WriteFile(filename,data , 0644)
+		if err != nil {
+			return false, err
+		}
+	if reload {
+		glog.V(3).Infof("Reloading nginx after App Protect Policy change")
+		return true, nil
+	}
+	return false, nil	
+}
+
+func deleteFile(napconfigFolder string, key string) error {
+	filename := napconfigFolder + key
+	err := os.Remove(filename)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (lbc *LoadBalancerController) isAppProtectPolicyInUse(key string) (bool, string) {
+	polname := key
+	ings, err := lbc.ingressLister.List()
+	if err != nil {
+		return false, "empty"
+	}
+	for i := range ings.Items {
+		anns := ings.Items[i].GetAnnotations()
+		if anns["appprotect.f5.com/app_protect_policy"] == polname {
+			return true, ings.Items[i].GetName()
+		}
+	}
+	return false, "empty"
+}
+
+func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
+	key := task.Key
+	glog.V(3).Infof("Syncing AppProtectLogConf %v", key)
+	obj, polexists, err := lbc.appProtectLogConfLister.GetByKey(key)
+	if ! polexists {
+		glog.V(3).Infof("Deleting AppProtectLogConf %v", key)
+		err = deleteFile(lbc.appProtectLogConfFolder, key)
+	} 	else {
+		glog.V(3).Infof("Adding/Updating AppProtectLogConf %v", key)	
+		reload, err := writeToFile(lbc.appProtectLogConfFolder, obj.(*unstructured.Unstructured))
+		if err != nil {
+			glog.V(3).Infof("Error Syncing policy %v", key)
+		}
+		if reload {
+			lbc.configurator.ReoladOnAppProtectPolicyUpdate()
+		}
+	}
+	if err != nil {
+		glog.V(3).Infof("Error Syncing policy %v", key)
+	}
 }

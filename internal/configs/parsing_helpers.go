@@ -186,3 +186,9 @@ func ParseTime(s string) (string, error) {
 	}
 	return "", errors.New("Invalid time string")
 }
+
+//VerifyThresholds ensures that threshold values are set correctly
+func VerifyThresholds(p string) bool {
+	pattern := regexp.MustCompile(`high=([1-9]|[1-9][0-9]|100) low=([1-9]|[1-9][0-9]|100)`)
+	return pattern.Match([]byte(p))
+}
