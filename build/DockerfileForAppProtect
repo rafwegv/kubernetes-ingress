@@ -7,12 +7,17 @@ RUN yum install -y app-protect
 
 RUN rm -rf /etc/nginx/nginx.conf
 
+RUN usermod -u 101 nginx \
+  && groupmod -g 101 nginx
 
 RUN  mkdir -p /var/lib/nginx \
   && mkdir -p /etc/nginx/secrets \
   && mkdir -p /etc/nginx/waf \
   && mkdir -p /var/log/f5waf \
   && mkdir -p /opt/f5waf \
+  && chown -R nginx:nginx /etc/f5waf \
+  && chown -R nginx:nginx /opt/app_protect/pipe \
+  && chown -R nginx:nginx /usr/share/ts \
   && chown -R nginx:nginx /etc/nginx/secrets \
   && chown -R nginx:nginx /etc/nginx/waf \
   && chown -R nginx:nginx /etc/nginx \
@@ -21,6 +26,9 @@ RUN  mkdir -p /var/lib/nginx \
   && chown -R nginx:nginx /var/log/f5waf/ \
   && chown -R nginx:nginx /opt/f5waf/ \
   && chown -R nginx:nginx /var/log/nginx/ \
+  && chown nginx:nginx /usr/lib64/libf5util.so \
+  && chown nginx:nginx /usr/lib64/libgeoip.so \
+  && chown nginx:nginx /usr/lib64/libgeoip1.so \
   && rm /etc/nginx/conf.d/*
 
 COPY log-default.json /etc/nginx
