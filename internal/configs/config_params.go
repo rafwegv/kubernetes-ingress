@@ -100,6 +100,8 @@ type StaticConfigParams struct {
 	NginxStatusAllowCIDRs          []string
 	NginxStatusPort                int
 	StubStatusOverUnixSocketForOSS bool
+	AppProtectLoadModule		   bool
+
 }
 
 // NewDefaultConfigParams creates a ConfigParams with default values.

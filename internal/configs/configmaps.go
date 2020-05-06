@@ -423,14 +423,6 @@ func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool) *ConfigParams {
 		}
 	}
 
-	if appProtectLoadModule, exists, err := GetMapKeyAsBool( cfgm.Data, "AppProtect", cfgm); exists {
-		if err != nil {
-			glog.Error(err)
-		} else {
-			cfgParams.AppProtectLoadModule = appProtectLoadModule
-		}
-	
-	}
 	if appProtectFailureModeAction, exists := cfgm.Data["app_protect_failure_mode_action"]; exists {
 		if appProtectFailureModeAction == "pass" || appProtectFailureModeAction == "drop" {
 		cfgParams.AppProtectFailureModeAction = appProtectFailureModeAction
@@ -505,7 +497,7 @@ func GenerateNginxMainConfig(staticCfgParams *StaticConfigParams, config *Config
 		OpenTracingEnabled:             config.MainOpenTracingEnabled,
 		OpenTracingTracer:              config.MainOpenTracingTracer,
 		OpenTracingTracerConfig:        config.MainOpenTracingTracerConfig,
-		AppProtectLoadModule:           config.AppProtectLoadModule,
+		AppProtectLoadModule:           staticCfgParams.AppProtectLoadModule,
 		AppProtectFailureModeAction:    config.AppProtectFailureModeAction,
 		AppProtectCookieSeed:           config.AppProtectCookieSeed,
 		AppProtectCPUThresholds:        config.AppProtectCPUThresholds,

@@ -77,6 +77,7 @@ spec:
               fieldPath: metadata.name
         args:
           - -nginx-plus={{ .Values.controller.nginxplus }}
+          - -app-protect={{ .Values.controller.appprotect}}
           - -nginx-configmaps=$(POD_NAMESPACE)/{{ include "nginx-ingress.configName" . }}
 {{- if .Values.controller.defaultTLS.secret }}
           - -default-server-tls-secret={{ .Values.controller.defaultTLS.secret }}

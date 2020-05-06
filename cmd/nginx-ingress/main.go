@@ -62,6 +62,8 @@ var (
 
 	nginxPlus = flag.Bool("nginx-plus", false, "Enable support for NGINX Plus")
 
+	appProtect = flag.Bool("app-protect", false, "Enable support for App-Protect")
+
 	ingressClass = flag.String("ingress-class", "nginx",
 		`A class of the Ingress controller. The Ingress controller only processes Ingress resources that belong to its class
 	- i.e. have the annotation "kubernetes.io/ingress.class" equal to the class. Additionally,
@@ -297,6 +299,7 @@ func main() {
 	}
 
 	cfgParams := configs.NewDefaultConfigParams()
+	
 	if *nginxConfigMaps != "" {
 		ns, name, err := k8s.ParseNamespaceName(*nginxConfigMaps)
 		if err != nil {
@@ -328,7 +331,6 @@ func main() {
 			}
 		}
 	}
-
 	staticCfgParams := &configs.StaticConfigParams{
 		HealthStatus:                   *healthStatus,
 		HealthStatusURI:                *healthStatusURI,
@@ -336,6 +338,7 @@ func main() {
 		NginxStatusAllowCIDRs:          allowedCIDRs,
 		NginxStatusPort:                *nginxStatusPort,
 		StubStatusOverUnixSocketForOSS: *enablePrometheusMetrics,
+		AppProtectLoadModule: 			*appProtect,
 	}
 
 	ngxConfig := configs.GenerateNginxMainConfig(staticCfgParams, cfgParams)
@@ -394,7 +397,7 @@ func main() {
 		Namespace:                 *watchNamespace,
 		NginxConfigurator:         cnf,
 		DefaultServerSecret:       *defaultServerSecret,
-		AppProtectEnabled:          ngxConfig.AppProtectLoadModule,
+		AppProtectEnabled:         *appProtect,
 		IsNginxPlus:               *nginxPlus,
 		IngressClass:              *ingressClass,
 		UseIngressClassOnly:       *useIngressClassOnly,
