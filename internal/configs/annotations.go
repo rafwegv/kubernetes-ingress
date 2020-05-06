@@ -320,7 +320,7 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 		}
 	}
 	if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_policy"]; exists {
-		cfgParams.AppProtectPolicy = appProtectPolicy
+		cfgParams.AppProtectPolicy = strings.Replace(appProtectPolicy, "/", "_", 1)
 	}
 
 	if appProtectLogEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log_enable"]; exists {
@@ -332,7 +332,7 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 	}
 
 	if appProtectLogConf, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log"]; exists {
-		cfgParams.AppProtectLogConf = appProtectLogConf
+		cfgParams.AppProtectLogConf = strings.Replace(appProtectLogConf, "/", "_", 1)
 	}
 
 	return cfgParams

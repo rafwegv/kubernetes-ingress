@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-	"os"
-	"io/ioutil"
 	"encoding/json"
 
 	"github.com/golang/glog"
@@ -34,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	//"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	core_v1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -114,9 +111,7 @@ type LoadBalancerController struct {
 	syncQueue                    *taskQueue
 	ctx                          context.Context
 	cancel                       context.CancelFunc
-	configurator                 *configs.Configurator
-	appProtectPolicyFolder		 string
-	appProtectLogConfFolder	     string		
+	configurator                 *configs.Configurator	
 	watchNginxConfigMaps         bool
 	appProtectEnabled            bool
 	isNginxPlus                  bool
@@ -147,8 +142,6 @@ type NewLoadBalancerControllerInput struct {
 	ResyncPeriod              time.Duration
 	Namespace                 string
 	NginxConfigurator         *configs.Configurator
-	AppProtectPolicyFolder    string
-	AppProtectLogConfFolder   string
 	DefaultServerSecret       string
 	AppProtectEnabled         bool
 	IsNginxPlus               bool
@@ -172,8 +165,6 @@ func NewLoadBalancerController(input NewLoadBalancerControllerInput) *LoadBalanc
 		confClient:                input.ConfClient,
 		dynClient:                 input.DynClient,
 		configurator:              input.NginxConfigurator,
-		appProtectPolicyFolder:	   input.AppProtectPolicyFolder,
-		appProtectLogConfFolder:   input.AppProtectLogConfFolder,
 		defaultServerSecret:       input.DefaultServerSecret,
 		appProtectEnabled:         input.AppProtectEnabled,
 		isNginxPlus:               input.IsNginxPlus,
@@ -2187,98 +2178,107 @@ func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
 	key := task.Key
 	glog.V(3).Infof("Syncing AppProtectPolicy %v", key)
 	obj, polexists, err := lbc.appProtectPolicyLister.GetByKey(key)
-	if ! polexists {
-		glog.V(3).Infof("Deleting AppProtectPolicy %v", key)
-		err = deleteFile(lbc.appProtectPolicyFolder, key)
-		if inUse, ingName := lbc.isAppProtectPolicyInUse(key); inUse {
-		   err = fmt.Errorf("WARNING! AppProtectPolicy %s deleted but in use in %s", key,  ingName)  
-		   lbc.syncQueue.RequeueAfter(task, err, 5*time.Second)
-		}
-	} 	else {
-		glog.V(3).Infof("Adding/Updating AppProtectPolicy %v", key)	
-		reload, err := writeToFile(lbc.appProtectPolicyFolder, obj.(*unstructured.Unstructured))
-		if err != nil {
-			glog.V(3).Infof("Error Syncing policy %v", key)
-		}
-		if reload {
-			lbc.configurator.ReoladOnAppProtectPolicyUpdate()
-		}
-	}
 	if err != nil {
 		glog.V(3).Infof("Error Syncing policy %v", key)
+		return
 	}
+	if ! polexists {
+		inuse, name := lbc.isAppProtectPolicyInUse(key)
+		if inuse {
+			glog.V(1).Infof("WARNING! Deleted AppProtectPolicy %v is in use in ingress %v", key, name)
+		}
+		err = lbc.configurator.DeleteAppProtectPolicy(key)
+		if err != nil {
+			glog.V(3).Infof("Error deleting AppProtectPolicy %v", key)
+		}
+		
+	} 	else {
+			spec, found, err := unstructured.NestedMap(obj.(*unstructured.Unstructured).Object, "spec")
+			if err != nil {
+				glog.V(3).Infof("Error getting spec from AppProtectPolicy %v: %v", key, err)
+				return
+			}
+			if ! found {
+				glog.V(3).Infof("'spec' field not found in AppProtectPolicy %v", key)
+				return				
+			}
+			PolicyData, err := json.Marshal(spec)
+			if err != nil {
+				glog.V(3).Infof("Error marshaling AppProtectPolicy %v: %v ", key, err)
+			}
+			err = lbc.configurator.AddOrUpdateAppProtectPolicy(key, PolicyData)
+			if err != nil {
+				glog.V(3).Infof("Error adding or updating AppProtectPolicy %v : %v", key, err)
+			}
+	}
+
 }
 
-func writeToFile(napconfigFolder string, resource *unstructured.Unstructured) (bool, error) {
-	spec, found, err := unstructured.NestedMap(resource.Object, "spec")
-		reload := true
-		if ! found {
-			return false, err
-		}
-		data, err := json.Marshal(spec)
-		if err != nil {
-			return false, err
-		}
-		os.MkdirAll(napconfigFolder + resource.GetNamespace(), 0755)
-		filename := napconfigFolder + resource.GetNamespace() + "/" + resource.GetName()
-		_, err = os.Stat(filename) 
-		if os.IsNotExist(err) {
-			reload = false
-		}
-		glog.V(3).Infof("Writing %s\n", filename)
-		err = ioutil.WriteFile(filename,data , 0644)
-		if err != nil {
-			return false, err
-		}
-	if reload {
-		glog.V(3).Infof("Reloading nginx after App Protect Policy change")
-		return true, nil
-	}
-	return false, nil	
-}
 
-func deleteFile(napconfigFolder string, key string) error {
-	filename := napconfigFolder + key
-	err := os.Remove(filename)
+func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
+	key := task.Key
+	glog.V(3).Infof("Syncing AppProtectLogConf %v", key)
+	obj, confexists, err := lbc.appProtectLogConfLister.GetByKey(key)
 	if err != nil {
-		return err
+		glog.V(3).Infof("Error Syncing AppProtectLogConf %v", key)
+		return
 	}
-	return nil
+	if ! confexists {
+		glog.V(3).Infof("Deleting AppProtectLogConf %v", key)
+		inuse, name := lbc.isAppProtectLogConfInUse(key)
+		if inuse {
+			glog.V(1).Infof("WARNING! Deleted AppProtectLogConf %v is in use in ingress %v", key, name)
+		}
+		err = lbc.configurator.DeleteAppProtectLogConf(key)
+		if err != nil {
+			glog.V(3).Infof("Error deleting AppProtectPolicy %v", key)
+		}
+	} else {
+		spec, found, err := unstructured.NestedMap(obj.(*unstructured.Unstructured).Object, "spec")
+			if err != nil {
+				glog.V(3).Infof("Error getting spec from AppProtectLogConf %v: %v", key, err)
+				return
+			}
+			if ! found {
+				glog.V(3).Infof("'spec' field not found in AppProtectLogConf %v", key)
+				return				
+			}
+			PolicyData, err := json.Marshal(spec)
+			if err != nil {
+				glog.V(3).Infof("Error marshaling AppProtectLogConf %v: %v ", key, err)
+			}
+			err = lbc.configurator.AddOrUpdateAppProtectLogConf(key, PolicyData)
+			if err != nil {
+				glog.V(3).Infof("Error adding or updating AppProtectLogConf %v : %v", key, err)
+			}
+	}
+
 }
 
 func (lbc *LoadBalancerController) isAppProtectPolicyInUse(key string) (bool, string) {
-	polname := key
 	ings, err := lbc.ingressLister.List()
 	if err != nil {
 		return false, "empty"
 	}
 	for i := range ings.Items {
 		anns := ings.Items[i].GetAnnotations()
-		if anns["appprotect.f5.com/app_protect_policy"] == polname {
+		if anns["appprotect.f5.com/app_protect_policy"] == key {
 			return true, ings.Items[i].GetName()
 		}
 	}
 	return false, "empty"
 }
 
-func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
-	key := task.Key
-	glog.V(3).Infof("Syncing AppProtectLogConf %v", key)
-	obj, polexists, err := lbc.appProtectLogConfLister.GetByKey(key)
-	if ! polexists {
-		glog.V(3).Infof("Deleting AppProtectLogConf %v", key)
-		err = deleteFile(lbc.appProtectLogConfFolder, key)
-	} 	else {
-		glog.V(3).Infof("Adding/Updating AppProtectLogConf %v", key)	
-		reload, err := writeToFile(lbc.appProtectLogConfFolder, obj.(*unstructured.Unstructured))
-		if err != nil {
-			glog.V(3).Infof("Error Syncing policy %v", key)
-		}
-		if reload {
-			lbc.configurator.ReoladOnAppProtectPolicyUpdate()
-		}
-	}
+func (lbc *LoadBalancerController) isAppProtectLogConfInUse(key string) (bool, string) {
+	ings, err := lbc.ingressLister.List()
 	if err != nil {
-		glog.V(3).Infof("Error Syncing policy %v", key)
+		return false, "empty"
 	}
+	for i := range ings.Items {
+		anns := ings.Items[i].GetAnnotations()
+		if anns["appprotect.f5.com/app_protect_security_log"] == key {
+			return true, ings.Items[i].GetName()
+		}
+	}
+	return false, "empty"
 }

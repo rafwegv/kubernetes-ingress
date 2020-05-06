@@ -393,8 +393,6 @@ func main() {
 		ResyncPeriod:              30 * time.Second,
 		Namespace:                 *watchNamespace,
 		NginxConfigurator:         cnf,
-		AppProtectLogConfFolder:   "/etc/nginx/waf/nac-logconfs/"  ,
-		AppProtectPolicyFolder:    "/etc/nginx/waf/nac-policies/",
 		DefaultServerSecret:       *defaultServerSecret,
 		AppProtectEnabled:          ngxConfig.AppProtectLoadModule,
 		IsNginxPlus:               *nginxPlus,

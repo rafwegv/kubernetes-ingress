@@ -1,9 +1,18 @@
 FROM centos:7.4.1708
 
 ARG RELEASE
-COPY appprotect.repo /etc/yum.repos.d/app-protect.repo
-RUN yum install -y epel-release
-RUN yum install -y app-protect
+COPY nginx-repo.crt nginx-repo.key /etc/ssl/nginx/
+RUN curl -o /etc/yum.repos.d/nginx-plus-7.repo https://cs.nginx.com/static/files/nginx-plus-7.repo
+#RUN echo "[app-protect-signatures]" >> /etc/yum.repos.d/signatures-7.repo \
+#&&  echo "name=app-protect-signatures" >> /etc/yum.repos.d/signatures-7.repo \
+#&& echo 'baseurl=https://app-protect-sigs.nginx.com/centos/7/$basearch/' >> /etc/yum.repos.d/signatures-7.repo
+RUN rpm --import http://download.fedoraproject.org/pub/epel/RPM-GPG-KEY-EPEL-6
+RUN yum install -y ca-certificates epel-release
+RUN yum install -y app-protect \
+ # app-protect-attack-signatures \
+  && yum clean all \
+  && rm -rf /var/cache/yum \
+  && rm -rf /etc/ssl/nginx
 
 RUN rm -rf /etc/nginx/nginx.conf
 
@@ -13,6 +22,8 @@ RUN usermod -u 101 nginx \
 RUN  mkdir -p /var/lib/nginx \
   && mkdir -p /etc/nginx/secrets \
   && mkdir -p /etc/nginx/waf \
+  && mkdir -p /etc/nginx/waf/nac-policies \
+  && mkdir -p /etc/nginx/waf/nac-logconfs \
   && mkdir -p /var/log/f5waf \
   && mkdir -p /opt/f5waf \
   && chown -R nginx:nginx /etc/f5waf \
@@ -27,8 +38,8 @@ RUN  mkdir -p /var/lib/nginx \
   && chown -R nginx:nginx /opt/f5waf/ \
   && chown -R nginx:nginx /var/log/nginx/ \
   && chown nginx:nginx /usr/lib64/libf5util.so \
-  && chown nginx:nginx /usr/lib64/libgeoip.so \
-  && chown nginx:nginx /usr/lib64/libgeoip1.so \
+  #&& chown nginx:nginx /usr/lib64/libgeoip.so \
+  #&& chown nginx:nginx /usr/lib64/libgeoip1.so \
   && rm /etc/nginx/conf.d/*
 
 COPY log-default.json /etc/nginx
@@ -39,8 +50,6 @@ COPY nginx-ingress /
 COPY internal/configs/version1/nginx-plus.ingress.tmpl /
 COPY internal/configs/version1/nginx-plus.tmpl /
 COPY internal/configs/version2/nginx-plus.virtualserver.tmpl  /
-#COPY waf-policy.json /etc/nginx/waf
-#RUN chown nginx:nginx /etc/nginx/waf/waf-policy.json
 
 # Uncomment the line below if you would like to add the default.pem to the image
 # and use it as a certificate and key for the default server

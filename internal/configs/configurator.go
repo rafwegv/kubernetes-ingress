@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
-
+	"os"
+	"io/ioutil"
 	"github.com/nginxinc/kubernetes-ingress/internal/configs/version2"
 
 	"github.com/golang/glog"
@@ -18,6 +19,8 @@ import (
 
 const pemFileNameForMissingTLSSecret = "/etc/nginx/secrets/default"
 const pemFileNameForWildcardTLSSecret = "/etc/nginx/secrets/wildcard"
+const appProtectPolicyFolder = "/etc/nginx/waf/nac-policies/"
+const appProtectLogConfFolder = "/etc/nginx/waf/nac-logconfs/"
 
 // DefaultServerSecretName is the filename of the Secret with a TLS cert and a key for the default server.
 const DefaultServerSecretName = "default"
@@ -654,7 +657,50 @@ func (cnf *Configurator) GetVirtualServerCounts() (vsCount int, vsrCount int) {
 	return vsCount, vsrCount
 }
 
-// ReoladOnAppProtectPolicyUpdate gets called from controller when an AppProtect policy was updated
-func (cnf *Configurator) ReoladOnAppProtectPolicyUpdate() error {
-	return cnf.nginxManager.Reload()
+
+//AddOrUpdateAppProtectPolicy writes policy data to a file
+func (cnf *Configurator) AddOrUpdateAppProtectPolicy(key string, data []byte) error {
+	
+	AppolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
+	
+	_, existErr := os.Stat(AppolicyFilePath) 
+	
+	err := ioutil.WriteFile(AppolicyFilePath, data , 0644)
+	if err != nil {
+		return fmt.Errorf("Error when writing Policy to file: %v", err)
+	}
+	
+	if ! os.IsNotExist(existErr) {
+		return cnf.nginxManager.Reload()
+	}
+	return nil
+}
+
+// DeleteAppProtectPolicy deletes the policy data file
+func (cnf *Configurator) DeleteAppProtectPolicy(key string) error {
+	AppolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
+	return os.Remove(AppolicyFilePath)
+}
+
+// AddOrUpdateAppProtectLogConf writes a log configuration to file
+func (cnf *Configurator) AddOrUpdateAppProtectLogConf(key string, data []byte) error {
+
+	logConfFilePath	:= appProtectLogConfFolder + strings.Replace(key, "/", "_", 1)
+
+	_, existErr := os.Stat(logConfFilePath)
+
+	err := ioutil.WriteFile(logConfFilePath, data , 0644)
+	if err != nil {
+		return fmt.Errorf("Error when writing LogConfig to file: %v", err)
+	}	
+	if ! os.IsNotExist(existErr) {
+		return cnf.nginxManager.Reload()
+	}
+	return nil
+}
+
+// DeleteAppProtectLogConf deletes the policy data file
+func (cnf *Configurator) DeleteAppProtectLogConf(key string) error {
+	logConfFilePath := appProtectLogConfFolder + strings.Replace(key, "/", "_", 1)
+	return os.Remove(logConfFilePath)
 }
