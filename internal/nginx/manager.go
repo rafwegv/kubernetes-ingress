@@ -49,6 +49,10 @@ type Manager interface {
 	SetPlusClients(plusClient *client.NginxClient, plusConfigVersionCheckClient *http.Client)
 	UpdateServersInPlus(upstream string, servers []string, config ServerConfig) error
 	SetOpenTracing(openTracing bool)
+	AppProtectAgentStart(apaDone chan error)
+	AppProtectAgentQuit()
+	AppProtectPluginStart(appDone chan error)
+	AppProtectPluginQuit()
 }
 
 // LocalManager updates NGINX configuration, starts, reloads and quits NGINX,
@@ -69,6 +73,11 @@ type LocalManager struct {
 	plusConfigVersionCheckClient *http.Client
 	metricsCollector             collectors.ManagerCollector
 	OpenTracing                  bool
+	appProtectPluginStartCmd     string
+	appProtectPluginPid      int
+	appProtectAgentStartCmd      string
+	appProtectAgentPid       int
+	appProtectPluginLog          *os.File
 }
 
 // NewLocalManager creates a LocalManager.
@@ -79,18 +88,20 @@ func NewLocalManager(confPath string, binaryFilename string, mc collectors.Manag
 	}
 
 	manager := LocalManager{
-		confdPath:             path.Join(confPath, "conf.d"),
-		secretsPath:           path.Join(confPath, "secrets"),
-		dhparamFilename:       path.Join(confPath, "secrets", "dhparam.pem"),
-		mainConfFilename:      path.Join(confPath, "nginx.conf"),
-		configVersionFilename: path.Join(confPath, "config-version.conf"),
-		binaryFilename:        binaryFilename,
-		verifyConfigGenerator: verifyConfigGenerator,
-		configVersion:         0,
-		verifyClient:          newVerifyClient(),
-		reloadCmd:             fmt.Sprintf("%v -s %v", binaryFilename, "reload"),
-		quitCmd:               fmt.Sprintf("%v -s %v", binaryFilename, "quit"),
-		metricsCollector:      mc,
+		confdPath:                path.Join(confPath, "conf.d"),
+		secretsPath:              path.Join(confPath, "secrets"),
+		dhparamFilename:          path.Join(confPath, "secrets", "dhparam.pem"),
+		mainConfFilename:         path.Join(confPath, "nginx.conf"),
+		configVersionFilename:    path.Join(confPath, "config-version.conf"),
+		binaryFilename:           binaryFilename,
+		verifyConfigGenerator:    verifyConfigGenerator,
+		configVersion:            0,
+		verifyClient:             newVerifyClient(),
+		reloadCmd:                fmt.Sprintf("%v -s %v", binaryFilename, "reload"),
+		quitCmd:                  fmt.Sprintf("%v -s %v", binaryFilename, "quit"),
+		metricsCollector:         mc,
+		appProtectPluginStartCmd: "/usr/share/ts/bin/bd-socket-plugin",
+		appProtectAgentStartCmd:  "/opt/f5waf/bin/bd_agent",
 	}
 
 	return &manager
@@ -321,4 +332,68 @@ func verifyConfigVersion(httpClient *http.Client, configVersion int) error {
 // SetOpenTracing sets the value of OpenTracing for the Manager
 func (lm *LocalManager) SetOpenTracing(openTracing bool) {
 	lm.OpenTracing = openTracing
+}
+
+// AppProtectAgentStart starts the AppProtect agent
+func (lm *LocalManager) AppProtectAgentStart(apaDone chan error) {
+	glog.V(3).Info("Starting AppProtect Agent")
+
+	cmd := exec.Command(lm.appProtectAgentStartCmd)
+	if err := cmd.Start(); err != nil {
+		glog.Fatalf("Failed to start AppProtect Agent: %v", err)
+	}
+	lm.appProtectAgentPid = cmd.Process.Pid
+	go func() {
+		apaDone <- cmd.Wait()
+	}()
+
+}
+
+// AppProtectAgentQuit gracefully ends AppProtect Agent.
+func (lm *LocalManager) AppProtectAgentQuit() {
+	glog.V(3).Info("Quitting AppProtect Agent")
+	killcmd := fmt.Sprintf("kill %d", lm.appProtectAgentPid)
+	if err := shellOut(killcmd); err != nil {
+		glog.Fatalf("Failed to quit AppProtect Agent: %v", err)
+	}
+}
+
+// AppProtectPluginStart starts the AppProtect plugin.
+func (lm *LocalManager) AppProtectPluginStart(appDone chan error) {
+	glog.V(3).Info("Starting AppProtect Plugin")
+
+	var err error
+	args := []string{"tmm_count", "4", "proc_cpuinfo_cpu_mhz", "2000000", "total_xml_memory", "307200000", "total_umu_max_size", "3129344", "sys_max_account_id 1024", "no_static_config"}
+	cmd := exec.Command(lm.appProtectPluginStartCmd, args...)
+	lm.appProtectPluginLog, err = os.Create("/var/log/f5waf/bd-socket-plugin.log")
+	if err != nil {
+		glog.Fatalf("error opening AppProtect Plugin log: %v", err)
+	}
+
+	cmd.Stdout = lm.appProtectPluginLog
+	cmd.Stderr = lm.appProtectPluginLog
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH=/usr/lib64/bd")
+
+	if err := cmd.Start(); err != nil {
+		glog.Fatalf("Failed to start AppProtect Plugin: %v", err)
+	}
+	lm.appProtectPluginPid = cmd.Process.Pid
+	go func() {
+		appDone <- cmd.Wait()
+	}()
+
+}
+
+// AppProtectPluginQuit gracefully ends AppProtect Agent.
+func (lm *LocalManager) AppProtectPluginQuit() {
+	glog.V(3).Info("Quitting AppProtect Plugin")
+	err := lm.appProtectPluginLog.Close()
+	if err != nil {
+		glog.V(3).Infof("Error closing AppProtectPlugin Log: %v", err)
+	}
+	killcmd := fmt.Sprintf("kill %d", lm.appProtectPluginPid)
+	if err = shellOut(killcmd); err != nil {
+		glog.Fatalf("Failed to quit AppProtect Plugin: %v", err)
+	}
 }

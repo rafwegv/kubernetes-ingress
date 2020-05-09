@@ -59,4 +59,4 @@ ADD protect_start.sh /
 RUN chmod +x /protect_start.sh
 RUN setcap cap_net_bind_service=+ep /usr/sbin/nginx 
 
-ENTRYPOINT ["/protect_start.sh"]
+ENTRYPOINT ["/nginx-ingress"]

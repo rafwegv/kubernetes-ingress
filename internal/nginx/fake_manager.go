@@ -105,3 +105,23 @@ func (*FakeManager) CreateOpenTracingTracerConfig(content string) error {
 // SetOpenTracing creates a fake implementation of SetOpenTracing.
 func (*FakeManager) SetOpenTracing(openTracing bool) {
 }
+
+// AppProtectAgentStart is a fake implementation of AppProtectAgentStart
+func (*FakeManager) AppProtectAgentStart(apaDone chan error) {
+	glog.V(3).Infof("Starting FakeAppProtectAgent")
+}
+
+// AppProtectAgentQuit is a fake implementtion AppProtectAgentQuit
+func (*FakeManager) AppProtectAgentQuit() {
+	glog.V(3).Infof("Quitting FakeAppProtectAgent")
+}
+
+// AppProtectPluginStart is a fake implementtion AppProtectPluginStart
+func (*FakeManager) AppProtectPluginStart(appDone chan error) {
+	glog.V(3).Infof("Starting FakeAppProtectPlugin")
+}
+
+// AppProtectPluginQuit is a fake implementtion AppProtectPluginQuit
+func (*FakeManager) AppProtectPluginQuit() {
+	glog.V(3).Infof("Quitting FakeAppProtectPlugin")
+}

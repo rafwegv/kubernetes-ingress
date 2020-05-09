@@ -28,11 +28,11 @@ import (
 	api_v1 "k8s.io/api/core/v1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/dynamic"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
@@ -299,7 +299,7 @@ func main() {
 	}
 
 	cfgParams := configs.NewDefaultConfigParams()
-	
+
 	if *nginxConfigMaps != "" {
 		ns, name, err := k8s.ParseNamespaceName(*nginxConfigMaps)
 		if err != nil {
@@ -338,7 +338,7 @@ func main() {
 		NginxStatusAllowCIDRs:          allowedCIDRs,
 		NginxStatusPort:                *nginxStatusPort,
 		StubStatusOverUnixSocketForOSS: *enablePrometheusMetrics,
-		AppProtectLoadModule: 			*appProtect,
+		AppProtectLoadModule:           *appProtect,
 	}
 
 	ngxConfig := configs.GenerateNginxMainConfig(staticCfgParams, cfgParams)
@@ -361,6 +361,17 @@ func main() {
 
 	nginxDone := make(chan error, 1)
 	nginxManager.Start(nginxDone)
+
+	var aPPluginDone chan error
+	var aPAgentDone chan error
+
+	if *appProtect {
+		aPPluginDone = make(chan error, 1)
+		aPAgentDone = make(chan error, 1)
+
+		nginxManager.AppProtectAgentStart(aPAgentDone)
+		nginxManager.AppProtectPluginStart(aPPluginDone)
+	}
 
 	var plusClient *client.NginxClient
 	if *nginxPlus && !useFakeNginxManager {
@@ -414,7 +425,11 @@ func main() {
 
 	lbc := k8s.NewLoadBalancerController(lbcInput)
 
-	go handleTermination(lbc, nginxManager, nginxDone)
+	if *appProtect {
+		go handleTerminationWithAppProtect(lbc, nginxManager, nginxDone, aPAgentDone, aPPluginDone)
+	} else {
+		go handleTermination(lbc, nginxManager, nginxDone)
+	}
 	lbc.Run()
 
 	for {
@@ -547,4 +562,53 @@ func validateLocation(location string) error {
 		return fmt.Errorf("invalid location format: %v", msg)
 	}
 	return nil
+}
+
+func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManager nginx.Manager, nginxDone, agentDone, pluginDone chan error) {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGTERM)
+
+	exitStatus := 0
+	
+
+	select {
+	case err := <-nginxDone:
+		if err != nil {
+			glog.Errorf("nginx command exited with an error: %v", err)
+			exitStatus = 1
+		} else {
+			glog.Info("nginx command exited successfully")
+		}
+		nginxManager.AppProtectPluginQuit()
+		nginxManager.AppProtectAgentQuit()
+	case err := <-pluginDone:
+		if err != nil {
+			glog.Errorf("AppProtectPlugin command exited with an error: %v", err)
+			exitStatus = 1
+		} else {
+			glog.Info("AppProtectPlugin command exited successfully")
+		}
+		nginxManager.AppProtectAgentQuit()
+		nginxManager.Quit()
+	case err := <-agentDone:
+		if err != nil {
+			glog.Errorf("AppProtectAgent command exited with an error: %v", err)
+			exitStatus = 1
+		} else {
+			glog.Info("AppProtectAgent command exited successfully")
+		}
+		nginxManager.AppProtectPluginQuit()
+		nginxManager.Quit()
+	case <-signalChan:
+		glog.Infof("Received SIGTERM, shutting down")
+		nginxManager.Quit()
+		nginxManager.AppProtectPluginQuit()
+		nginxManager.AppProtectAgentQuit()
+	}
+
+	glog.Infof("Shutting down the controller")
+	lbc.Stop()
+
+	glog.Infof("Exiting with a status: %v", exitStatus)
+	os.Exit(exitStatus)
 }
