@@ -3,9 +3,10 @@ package configs
 import (
 	"bytes"
 	"fmt"
-	"strings"
-	"os"
 	"io/ioutil"
+	"os"
+	"strings"
+
 	"github.com/nginxinc/kubernetes-ingress/internal/configs/version2"
 
 	"github.com/golang/glog"
@@ -87,7 +88,10 @@ func (cnf *Configurator) addOrUpdateIngress(ingEx *IngressEx) error {
 
 	isMinion := false
 	nginxCfg := generateNginxCfg(ingEx, pems, isMinion, cnf.cfgParams, cnf.isPlus, cnf.IsResolverConfigured(), jwtKeyFileName)
-
+	filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
+	if len(filesNotReady) > 0 {
+		return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
+	}
 	name := objectMetaToFileName(&ingEx.Ingress.ObjectMeta)
 	content, err := cnf.templateExecutor.ExecuteIngressConfigTemplate(&nginxCfg)
 	if err != nil {
@@ -657,20 +661,19 @@ func (cnf *Configurator) GetVirtualServerCounts() (vsCount int, vsrCount int) {
 	return vsCount, vsrCount
 }
 
-
 //AddOrUpdateAppProtectPolicy writes policy data to a file
 func (cnf *Configurator) AddOrUpdateAppProtectPolicy(key string, data []byte) error {
-	
+
 	AppolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
-	
-	_, existErr := os.Stat(AppolicyFilePath) 
-	
-	err := ioutil.WriteFile(AppolicyFilePath, data , 0644)
+
+	_, existErr := os.Stat(AppolicyFilePath)
+
+	err := ioutil.WriteFile(AppolicyFilePath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("Error when writing Policy to file: %v", err)
 	}
-	
-	if ! os.IsNotExist(existErr) {
+
+	if !os.IsNotExist(existErr) {
 		return cnf.nginxManager.Reload()
 	}
 	return nil
@@ -685,15 +688,15 @@ func (cnf *Configurator) DeleteAppProtectPolicy(key string) error {
 // AddOrUpdateAppProtectLogConf writes a log configuration to file
 func (cnf *Configurator) AddOrUpdateAppProtectLogConf(key string, data []byte) error {
 
-	logConfFilePath	:= appProtectLogConfFolder + strings.Replace(key, "/", "_", 1)
+	logConfFilePath := appProtectLogConfFolder + strings.Replace(key, "/", "_", 1)
 
 	_, existErr := os.Stat(logConfFilePath)
 
-	err := ioutil.WriteFile(logConfFilePath, data , 0644)
+	err := ioutil.WriteFile(logConfFilePath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("Error when writing LogConfig to file: %v", err)
-	}	
-	if ! os.IsNotExist(existErr) {
+	}
+	if !os.IsNotExist(existErr) {
 		return cnf.nginxManager.Reload()
 	}
 	return nil

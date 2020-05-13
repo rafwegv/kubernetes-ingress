@@ -18,11 +18,11 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
-	"encoding/json"
 
 	"github.com/golang/glog"
 
@@ -57,28 +57,28 @@ import (
 const (
 	ingressClassKey = "kubernetes.io/ingress.class"
 )
+
 var (
-    wafconfigGVR = schema.GroupVersionResource{
-		Group:   "appprotect.f5.com",
-		Version: "v1beta1",
+	wafconfigGVR = schema.GroupVersionResource{
+		Group:    "appprotect.f5.com",
+		Version:  "v1beta1",
 		Resource: "appolicies",
 	}
 	wafconfigGVK = schema.GroupVersionKind{
 		Group:   "appprotect.f5.com",
 		Version: "v1beta1",
-		Kind: "APPolicy",
+		Kind:    "APPolicy",
 	}
 	waflogconfigGVR = schema.GroupVersionResource{
-		Group:   "appprotect.f5.com",
-		Version: "v1beta1",
+		Group:    "appprotect.f5.com",
+		Version:  "v1beta1",
 		Resource: "aplogconfs",
 	}
 	waflogconfigGVK = schema.GroupVersionKind{
 		Group:   "appprotect.f5.com",
 		Version: "v1beta1",
-		Kind: "APLogConf",
+		Kind:    "APLogConf",
 	}
-
 )
 
 // LoadBalancerController watches Kubernetes API and
@@ -95,7 +95,7 @@ type LoadBalancerController struct {
 	virtualServerController      cache.Controller
 	virtualServerRouteController cache.Controller
 	podController                cache.Controller
-	dynInformerFactory           dynamicinformer.DynamicSharedInformerFactory 
+	dynInformerFactory           dynamicinformer.DynamicSharedInformerFactory
 	appProtectPolicyInformer     cache.SharedIndexInformer
 	appProtectLogConfInformer    cache.SharedIndexInformer
 	ingressLister                storeToIngressLister
@@ -106,12 +106,12 @@ type LoadBalancerController struct {
 	secretLister                 storeToSecretLister
 	virtualServerLister          cache.Store
 	virtualServerRouteLister     cache.Store
-	appProtectPolicyLister		 cache.Store
-	appProtectLogConfLister	     cache.Store			
+	appProtectPolicyLister       cache.Store
+	appProtectLogConfLister      cache.Store
 	syncQueue                    *taskQueue
 	ctx                          context.Context
 	cancel                       context.CancelFunc
-	configurator                 *configs.Configurator	
+	configurator                 *configs.Configurator
 	watchNginxConfigMaps         bool
 	appProtectEnabled            bool
 	isNginxPlus                  bool
@@ -210,7 +210,7 @@ func NewLoadBalancerController(input NewLoadBalancerControllerInput) *LoadBalanc
 	lbc.dynInformerFactory = dynamicinformer.NewDynamicSharedInformerFactory(lbc.dynClient, input.ResyncPeriod)
 	lbc.AddappProtectPolicyHandler(createAppProtectConfigHandlerfuncs(lbc))
 	lbc.AddappProtectLogConfHandler(createAppProtectLogConfHandlerfuncs(lbc))
-	
+
 	if lbc.areCustomResourcesEnabled {
 		lbc.addVirtualServerHandler(createVirtualServerHandlers(lbc))
 		lbc.addVirtualServerRouteHandler(createVirtualServerRouteHandlers(lbc))
@@ -253,6 +253,7 @@ func (lbc *LoadBalancerController) addLeaderHandler(leaderHandler leaderelection
 func (lbc *LoadBalancerController) AddSyncQueue(item interface{}) {
 	lbc.syncQueue.Enqueue(item)
 }
+
 // AddappProtectPolicyHandler create dynamic informers for custom appprotect policy resource
 func (lbc *LoadBalancerController) AddappProtectPolicyHandler(handlers cache.ResourceEventHandlerFuncs) {
 	lbc.appProtectPolicyInformer = lbc.dynInformerFactory.ForResource(wafconfigGVR).Informer()
@@ -382,12 +383,6 @@ func (lbc *LoadBalancerController) Run() {
 	lbc.ctx, lbc.cancel = context.WithCancel(context.Background())
 	if lbc.appProtectEnabled {
 		go lbc.dynInformerFactory.Start(lbc.ctx.Done())
-		go lbc.syncQueue.Run(time.Second, lbc.ctx.Done())
-	// Wait for the appProtect related caches to sync, which should give enough time for the files to be written,
-	// preventing potential race conditions
-		if ok := cache.WaitForCacheSync(lbc.ctx.Done(), lbc.appProtectLogConfInformer.HasSynced, lbc.appProtectPolicyInformer.HasSynced); !ok {
-			glog.Error("failed to wait for caches to sync")
-		}
 	}
 	if lbc.leaderElector != nil {
 		go lbc.leaderElector.Run(lbc.ctx)
@@ -403,7 +398,8 @@ func (lbc *LoadBalancerController) Run() {
 	if lbc.areCustomResourcesEnabled {
 		go lbc.virtualServerController.Run(lbc.ctx.Done())
 		go lbc.virtualServerRouteController.Run(lbc.ctx.Done())
-	}	
+	}
+	go lbc.syncQueue.Run(time.Second, lbc.ctx.Done())
 	<-lbc.ctx.Done()
 }
 
@@ -677,7 +673,7 @@ func (lbc *LoadBalancerController) sync(task task) {
 	case appProtectPolicy:
 		lbc.syncAppProtectPolicy(task)
 	case appProtectLogConf:
-		lbc.syncAppProtectLogConf(task)		
+		lbc.syncAppProtectLogConf(task)
 	}
 }
 
@@ -902,6 +898,11 @@ func (lbc *LoadBalancerController) syncIng(task task) {
 
 		err = lbc.configurator.AddOrUpdateIngress(ingEx)
 		if err != nil {
+			if strings.Contains(err.Error(), "AppProtect") {
+				lbc.syncQueue.RequeueAfter(task, err, 5*time.Second)
+				lbc.recorder.Eventf(ing, api_v1.EventTypeWarning, "Rejected", "%v was rejected: %v", key, err)
+				return
+			}
 			lbc.recorder.Eventf(ing, api_v1.EventTypeWarning, "AddedOrUpdatedWithError", "Configuration for %v was added or updated, but not applied: %v", key, err)
 		} else {
 			lbc.recorder.Eventf(ing, api_v1.EventTypeNormal, "AddedOrUpdated", "Configuration for %v was added or updated", key)
@@ -2182,7 +2183,7 @@ func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
 		glog.V(3).Infof("Error Syncing policy %v", key)
 		return
 	}
-	if ! polexists {
+	if !polexists {
 		inuse, name := lbc.isAppProtectPolicyInUse(key)
 		if inuse {
 			glog.V(1).Infof("WARNING! Deleted AppProtectPolicy %v is in use in ingress %v", key, name)
@@ -2191,29 +2192,28 @@ func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
 		if err != nil {
 			glog.V(3).Infof("Error deleting AppProtectPolicy %v", key)
 		}
-		
-	} 	else {
-			spec, found, err := unstructured.NestedMap(obj.(*unstructured.Unstructured).Object, "spec")
-			if err != nil {
-				glog.V(3).Infof("Error getting spec from AppProtectPolicy %v: %v", key, err)
-				return
-			}
-			if ! found {
-				glog.V(3).Infof("'spec' field not found in AppProtectPolicy %v", key)
-				return				
-			}
-			PolicyData, err := json.Marshal(spec)
-			if err != nil {
-				glog.V(3).Infof("Error marshaling AppProtectPolicy %v: %v ", key, err)
-			}
-			err = lbc.configurator.AddOrUpdateAppProtectPolicy(key, PolicyData)
-			if err != nil {
-				glog.V(3).Infof("Error adding or updating AppProtectPolicy %v : %v", key, err)
-			}
+
+	} else {
+		spec, found, err := unstructured.NestedMap(obj.(*unstructured.Unstructured).Object, "spec")
+		if err != nil {
+			glog.V(3).Infof("Error getting spec from AppProtectPolicy %v: %v", key, err)
+			return
+		}
+		if !found {
+			glog.V(3).Infof("'spec' field not found in AppProtectPolicy %v", key)
+			return
+		}
+		PolicyData, err := json.Marshal(spec)
+		if err != nil {
+			glog.V(3).Infof("Error marshaling AppProtectPolicy %v: %v ", key, err)
+		}
+		err = lbc.configurator.AddOrUpdateAppProtectPolicy(key, PolicyData)
+		if err != nil {
+			glog.V(3).Infof("Error adding or updating AppProtectPolicy %v : %v", key, err)
+		}
 	}
 
 }
-
 
 func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
 	key := task.Key
@@ -2223,7 +2223,7 @@ func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
 		glog.V(3).Infof("Error Syncing AppProtectLogConf %v", key)
 		return
 	}
-	if ! confexists {
+	if !confexists {
 		glog.V(3).Infof("Deleting AppProtectLogConf %v", key)
 		inuse, name := lbc.isAppProtectLogConfInUse(key)
 		if inuse {
@@ -2235,22 +2235,22 @@ func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
 		}
 	} else {
 		spec, found, err := unstructured.NestedMap(obj.(*unstructured.Unstructured).Object, "spec")
-			if err != nil {
-				glog.V(3).Infof("Error getting spec from AppProtectLogConf %v: %v", key, err)
-				return
-			}
-			if ! found {
-				glog.V(3).Infof("'spec' field not found in AppProtectLogConf %v", key)
-				return				
-			}
-			PolicyData, err := json.Marshal(spec)
-			if err != nil {
-				glog.V(3).Infof("Error marshaling AppProtectLogConf %v: %v ", key, err)
-			}
-			err = lbc.configurator.AddOrUpdateAppProtectLogConf(key, PolicyData)
-			if err != nil {
-				glog.V(3).Infof("Error adding or updating AppProtectLogConf %v : %v", key, err)
-			}
+		if err != nil {
+			glog.V(3).Infof("Error getting spec from AppProtectLogConf %v: %v", key, err)
+			return
+		}
+		if !found {
+			glog.V(3).Infof("'spec' field not found in AppProtectLogConf %v", key)
+			return
+		}
+		PolicyData, err := json.Marshal(spec)
+		if err != nil {
+			glog.V(3).Infof("Error marshaling AppProtectLogConf %v: %v ", key, err)
+		}
+		err = lbc.configurator.AddOrUpdateAppProtectLogConf(key, PolicyData)
+		if err != nil {
+			glog.V(3).Infof("Error adding or updating AppProtectLogConf %v : %v", key, err)
+		}
 	}
 
 }

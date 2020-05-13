@@ -2,6 +2,7 @@ package configs
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 
@@ -106,8 +107,8 @@ func generateNginxCfg(ingEx *IngressEx, pems map[string]string, isMinion bool, b
 			SSLPorts:              cfgParams.SSLPorts,
 			AppProtectEnable:      cfgParams.AppProtectEnable,
 			AppProtectPolicy:      cfgParams.AppProtectPolicy,
-			AppProtectLogConf:     cfgParams.AppProtectLogConf,        
-			AppProtectLogEnable:   cfgParams.AppProtectEnable,     
+			AppProtectLogConf:     cfgParams.AppProtectLogConf,
+			AppProtectLogEnable:   cfgParams.AppProtectEnable,
 		}
 
 		if pemFile, ok := pems[serverName]; ok {
@@ -434,4 +435,25 @@ func generateNginxCfgForMergeableIngresses(mergeableIngs *MergeableIngresses, ma
 		Keepalive: keepalive,
 		Ingress:   masterNginxCfg.Ingress,
 	}
+}
+
+func aPResourcesReferencedButNotReady(servers []version1.Server) []string {
+	output := []string{}
+	for _, server := range servers {
+		if policy := server.AppProtectPolicy; policy != "" {
+			policyFile := strings.Replace(policy, "/", "_", 1)
+			_, err := os.Stat(appProtectPolicyFolder + policyFile)
+			if os.IsNotExist(err) {
+				output = append(output, policyFile)
+			}
+		}
+		if logConf := server.AppProtectLogConf; logConf != "" {
+			logConfFile := strings.Replace(logConf, "/", "_", 1)
+			_, err := os.Stat(appProtectPolicyFolder + logConfFile)
+			if os.IsNotExist(err) {
+				output = append(output, logConfFile)
+			}
+		}
+	}
+	return output
 }
