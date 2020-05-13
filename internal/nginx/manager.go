@@ -101,7 +101,7 @@ func NewLocalManager(confPath string, binaryFilename string, mc collectors.Manag
 		quitCmd:                  fmt.Sprintf("%v -s %v", binaryFilename, "quit"),
 		metricsCollector:         mc,
 		appProtectPluginStartCmd: "/usr/share/ts/bin/bd-socket-plugin",
-		appProtectAgentStartCmd:  "/opt/f5waf/bin/bd_agent",
+		appProtectAgentStartCmd:  "/opt/app_protect/bin/bd_agent",
 	}
 
 	return &manager
@@ -365,7 +365,7 @@ func (lm *LocalManager) AppProtectPluginStart(appDone chan error) {
 	var err error
 	args := []string{"tmm_count", "4", "proc_cpuinfo_cpu_mhz", "2000000", "total_xml_memory", "307200000", "total_umu_max_size", "3129344", "sys_max_account_id 1024", "no_static_config"}
 	cmd := exec.Command(lm.appProtectPluginStartCmd, args...)
-	lm.appProtectPluginLog, err = os.Create("/var/log/f5waf/bd-socket-plugin.log")
+	lm.appProtectPluginLog, err = os.Create("/var/log/app_protect/bd-socket-plugin.log")
 	if err != nil {
 		glog.Fatalf("error opening AppProtect Plugin log: %v", err)
 	}

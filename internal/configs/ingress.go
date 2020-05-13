@@ -448,8 +448,9 @@ func aPResourcesReferencedButNotReady(servers []version1.Server) []string {
 			}
 		}
 		if logConf := server.AppProtectLogConf; logConf != "" {
-			logConfFile := strings.Replace(logConf, "/", "_", 1)
-			_, err := os.Stat(appProtectPolicyFolder + logConfFile)
+			entireLogConfValue := strings.Replace(logConf, "/", "_", 1)
+			logConfFile := strings.Fields(entireLogConfValue)[0]
+			_, err := os.Stat(appProtectLogConfFolder + logConfFile)
 			if os.IsNotExist(err) {
 				output = append(output, logConfFile)
 			}

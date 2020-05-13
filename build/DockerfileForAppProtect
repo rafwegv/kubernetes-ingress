@@ -58,9 +58,9 @@ RUN  mkdir -p /var/lib/nginx \
   && mkdir -p /etc/nginx/waf \
   && mkdir -p /etc/nginx/waf/nac-policies \
   && mkdir -p /etc/nginx/waf/nac-logconfs \
-  && mkdir -p /var/log/f5waf \
-  && mkdir -p /opt/f5waf \
-  && chown -R nginx:nginx /etc/f5waf \
+  && mkdir -p /var/log/app_protect \
+  && mkdir -p /opt/app_protect \
+  && chown -R nginx:nginx /etc/app_protect \
   && chown -R nginx:nginx /opt/app_protect/pipe \
   && chown -R nginx:nginx /usr/share/ts \
   && chown -R nginx:nginx /etc/nginx/secrets \
@@ -68,8 +68,8 @@ RUN  mkdir -p /var/lib/nginx \
   && chown -R nginx:nginx /etc/nginx \
   && chown -R nginx:nginx /var/cache/nginx \
   && chown -R nginx:nginx /var/lib/nginx/ \
-  && chown -R nginx:nginx /var/log/f5waf/ \
-  && chown -R nginx:nginx /opt/f5waf/ \
+  && chown -R nginx:nginx /var/log/app_protect/ \
+  && chown -R nginx:nginx /opt/app_protect/ \
   && chown -R nginx:nginx /var/log/nginx/ \
   #&& chown nginx:nginx /usr/lib64/libf5util.so \
   #&& chown nginx:nginx /usr/lib64/libgeoip.so \
