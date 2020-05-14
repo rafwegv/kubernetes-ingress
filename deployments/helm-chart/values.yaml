@@ -7,10 +7,10 @@ controller:
   kind: deployment
 
   ## Deploys the Ingress controller for NGINX Plus.
-  nginxplus: true
+  nginxplus: false
 
   ## Enables AppProtect
-  appprotect: true
+  appprotect: false
   
   ## Enables the Ingress controller pods to use the host's network namespace.
   hostNetwork: false
@@ -29,7 +29,7 @@ controller:
     repository: nginx/nginx-ingress
 
     ## The tag of the Ingress controller image.
-    tag: "1.6.3"
+    tag: edge
 
     ## The pull policy for the Ingress controller image.
     pullPolicy: IfNotPresent
@@ -135,7 +135,7 @@ controller:
     create: true
 
     ## The type of service to create for the Ingress controller.
-    type: NodePort
+    type: LoadBalancer
 
     ## The externalTrafficPolicy of the service. The value Local preserves the client source IP.
     externalTrafficPolicy: Local
@@ -164,7 +164,7 @@ controller:
       port: 80
 
       ## The custom NodePort for the HTTP port. Requires controller.service.type set to NodePort.
-      nodePort: 30080
+      nodePort: ""
 
       ## The HTTP port on the POD where the Ingress controller service is running.
       targetPort: 80
@@ -177,7 +177,7 @@ controller:
       port: 443
 
       ## The custom NodePort for the HTTPS port. Requires controller.service.type set to NodePort.
-      nodePort: 30443
+      nodePort: ""
 
       ## The HTTPS port on the POD where the Ingress controller service is running.
       targetPort: 443
