@@ -390,11 +390,11 @@ func createAppProtectConfigHandlerfuncs(lbc *LoadBalancerController) cache.Resou
 				oldpol := oldObj.(*unstructured.Unstructured)
 				newpol := obj.(*unstructured.Unstructured)
 				updated, err := compareSpecs(oldpol, newpol)
-				if updated {
-					lbc.AddSyncQueue(newpol)
-				}
 				if err != nil {
 					glog.V(3).Infof("Error when comparing policy %v", err)
+				}
+				if updated {
+					lbc.AddSyncQueue(newpol)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {

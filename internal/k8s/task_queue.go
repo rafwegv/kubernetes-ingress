@@ -49,7 +49,7 @@ func (tq *taskQueue) Enqueue(obj interface{}) {
 
 	task, err := newTask(key, obj)
 	if err != nil {
-		glog.V(1).Infof("Couldn't create a task for object %v: %v", obj, err)
+		glog.V(3).Infof("Couldn't create a task for object %v: %v", obj, err)
 		return
 	}
 

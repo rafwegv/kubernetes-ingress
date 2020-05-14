@@ -1,0 +1,26 @@
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: cafe-ingress
+  annotations:
+    appprotect.f5.com/app_protect_policy: "ingress-nginx/dataguard-alarm"
+    appprotect.f5.com/app_protect_enable: "on"
+    appprotect.f5.com/app_protect_security_log_enable: "on"
+    appprotect.f5.com/app_protect_security_log: "ingress-nginx/logconf syslog:server=127.0.0.1:514"
+spec:
+  tls:
+  - hosts:
+    - cafe.example.com
+    secretName: cafe-secret
+  rules:
+  - host: cafe.example.com
+    http:
+      paths:
+      - path: /tea
+        backend:
+          serviceName: tea-svc
+          servicePort: 80
+      - path: /coffee
+        backend:
+          serviceName: coffee-svc
+          servicePort: 80

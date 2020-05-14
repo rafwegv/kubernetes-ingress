@@ -8,6 +8,8 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.2.5
   creationTimestamp: null
   name: appolicies.appprotect.f5.com
+  labels:
+    {{- include "nginx-ingress.labels" . | nindent 4 }}
 spec:
   group: appprotect.f5.com
   names:
