@@ -88,10 +88,12 @@ func (cnf *Configurator) addOrUpdateIngress(ingEx *IngressEx) error {
 
 	isMinion := false
 	nginxCfg := generateNginxCfg(ingEx, pems, isMinion, cnf.cfgParams, cnf.isPlus, cnf.IsResolverConfigured(), jwtKeyFileName)
-	filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
-	if len(filesNotReady) > 0 {
-		return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
-	}
+	if cnf.staticCfgParams.AppProtectLoadModule {
+		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
+		if len(filesNotReady) > 0 {
+			return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
+		}
+	}	
 	name := objectMetaToFileName(&ingEx.Ingress.ObjectMeta)
 	content, err := cnf.templateExecutor.ExecuteIngressConfigTemplate(&nginxCfg)
 	if err != nil {
@@ -127,7 +129,12 @@ func (cnf *Configurator) addOrUpdateMergeableIngress(mergeableIngs *MergeableIng
 	}
 
 	nginxCfg := generateNginxCfgForMergeableIngresses(mergeableIngs, masterPems, masterJwtKeyFileName, minionJwtKeyFileNames, cnf.cfgParams, cnf.isPlus, cnf.IsResolverConfigured())
-
+	if cnf.staticCfgParams.AppProtectLoadModule {
+		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
+		if len(filesNotReady) > 0 {
+			return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
+		}
+	}	
 	name := objectMetaToFileName(&mergeableIngs.Master.Ingress.ObjectMeta)
 	content, err := cnf.templateExecutor.ExecuteIngressConfigTemplate(&nginxCfg)
 	if err != nil {

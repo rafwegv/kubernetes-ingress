@@ -870,6 +870,11 @@ func (lbc *LoadBalancerController) syncIng(task task) {
 				eventTitle = "AddedOrUpdatedWithError"
 				eventType = api_v1.EventTypeWarning
 				eventWarningMessage = fmt.Sprintf("but was not applied: %v", addErr)
+				if strings.Contains(addErr.Error(), "AppProtect") {
+					lbc.syncQueue.RequeueAfter(task, err, 5*time.Second)
+					lbc.recorder.Eventf(ing, api_v1.EventTypeWarning, "Rejected", "%v was rejected: %v", key, addErr)
+					return
+				}
 			}
 			lbc.recorder.Eventf(ing, eventType, eventTitle, "Configuration for %v(Master) was added or updated %s", key, eventWarningMessage)
 			for _, minion := range mergeableIngExs.Minions {
