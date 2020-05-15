@@ -44,8 +44,8 @@ type MergeableIngresses struct {
 	Minions []*IngressEx
 }
 
-func generateNginxCfg(ingEx *IngressEx, pems map[string]string, isMinion bool, baseCfgParams *ConfigParams, isPlus bool, isResolverConfigured bool, jwtKeyFileName string) version1.IngressNginxConfig {
-	cfgParams := parseAnnotations(ingEx, baseCfgParams, isPlus)
+func generateNginxCfg(ingEx *IngressEx, pems map[string]string, isMinion bool, baseCfgParams *ConfigParams, isPlus bool, hasAppProtect bool, isResolverConfigured bool, jwtKeyFileName string) version1.IngressNginxConfig {
+	cfgParams := parseAnnotations(ingEx, baseCfgParams, isPlus, hasAppProtect)
 	wsServices := getWebsocketServices(ingEx)
 	spServices := getSessionPersistenceServices(ingEx)
 	rewrites := getRewrites(ingEx)
@@ -368,7 +368,7 @@ func upstreamMapToSlice(upstreams map[string]version1.Upstream) []version1.Upstr
 }
 
 func generateNginxCfgForMergeableIngresses(mergeableIngs *MergeableIngresses, masterPems map[string]string, masterJwtKeyFileName string,
-	minionJwtKeyFileNames map[string]string, baseCfgParams *ConfigParams, isPlus bool, isResolverConfigured bool) version1.IngressNginxConfig {
+	minionJwtKeyFileNames map[string]string, baseCfgParams *ConfigParams, isPlus bool, hasAppProtect bool, isResolverConfigured bool) version1.IngressNginxConfig {
 	var masterServer version1.Server
 	var locations []version1.Location
 	var upstreams []version1.Upstream
@@ -382,7 +382,7 @@ func generateNginxCfgForMergeableIngresses(mergeableIngs *MergeableIngresses, ma
 	}
 
 	isMinion := false
-	masterNginxCfg := generateNginxCfg(mergeableIngs.Master, masterPems, isMinion, baseCfgParams, isPlus, isResolverConfigured, masterJwtKeyFileName)
+	masterNginxCfg := generateNginxCfg(mergeableIngs.Master, masterPems, isMinion, baseCfgParams, isPlus, hasAppProtect, isResolverConfigured, masterJwtKeyFileName)
 
 	masterServer = masterNginxCfg.Servers[0]
 	masterServer.Locations = []version1.Location{}
@@ -410,7 +410,7 @@ func generateNginxCfgForMergeableIngresses(mergeableIngs *MergeableIngresses, ma
 		pems := make(map[string]string)
 		jwtKeyFileName := minionJwtKeyFileNames[objectMetaToFileName(&minion.Ingress.ObjectMeta)]
 		isMinion := true
-		nginxCfg := generateNginxCfg(minion, pems, isMinion, baseCfgParams, isPlus, isResolverConfigured, jwtKeyFileName)
+		nginxCfg := generateNginxCfg(minion, pems, isMinion, baseCfgParams, isPlus, hasAppProtect, isResolverConfigured, jwtKeyFileName)
 
 		for _, server := range nginxCfg.Servers {
 			for _, loc := range server.Locations {

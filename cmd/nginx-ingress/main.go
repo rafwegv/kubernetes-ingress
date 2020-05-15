@@ -395,7 +395,7 @@ func main() {
 			go metrics.RunPrometheusListenerForNginx(*prometheusMetricsListenPort, client, registry)
 		}
 	}
-
+	
 	isWildcardEnabled := *wildcardTLSSecret != ""
 	cnf := configs.NewConfigurator(nginxManager, staticCfgParams, cfgParams, templateExecutor, templateExecutorV2, *nginxPlus, isWildcardEnabled)
 	controllerNamespace := os.Getenv("POD_NAMESPACE")

@@ -58,7 +58,7 @@ var minionInheritanceList = map[string]bool{
 	"nginx.org/fail-timeout":             true,
 }
 
-func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool) ConfigParams {
+func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool, hasAppProtect bool) ConfigParams {
 	cfgParams := *baseCfgParams
 
 	if lbMethod, exists := ingEx.Ingress.Annotations["nginx.org/lb-method"]; exists {
@@ -308,33 +308,35 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 		}
 	}
 
-	if failTimeout, exists := ingEx.Ingress.Annotations["nginx.org/fail-timeout"]; exists {
-		cfgParams.FailTimeout = failTimeout
-	}
-
-	if appProtectEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_enable"]; exists {
-		if appProtectEnable == "on" {
-			cfgParams.AppProtectEnable = true
-		} else {
-			cfgParams.AppProtectEnable = false
+	if hasAppProtect {
+		if failTimeout, exists := ingEx.Ingress.Annotations["nginx.org/fail-timeout"]; exists {
+			cfgParams.FailTimeout = failTimeout
 		}
-	}
-	if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_policy"]; exists {
-		cfgParams.AppProtectPolicy = strings.Replace(appProtectPolicy, "/", "_", 1)
-	}
 
-	if appProtectLogEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log_enable"]; exists {
-		if appProtectLogEnable == "on" {
-			cfgParams.AppProtectLogEnable = true
-		} else {
-			cfgParams.AppProtectLogEnable = false
+		if appProtectEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_enable"]; exists {
+			if appProtectEnable == "on" {
+				cfgParams.AppProtectEnable = true
+			} else {
+				cfgParams.AppProtectEnable = false
+			}
 		}
-	}
+		if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_policy"]; exists {
+			cfgParams.AppProtectPolicy = strings.Replace(appProtectPolicy, "/", "_", 1)
+		}
 
-	if appProtectLogConf, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log"]; exists {
-		cfgParams.AppProtectLogConf = strings.Replace(appProtectLogConf, "/", "_", 1)
-	}
+		if appProtectLogEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log_enable"]; exists {
+			if appProtectLogEnable == "on" {
+				cfgParams.AppProtectLogEnable = true
+			} else {
+				cfgParams.AppProtectLogEnable = false
+			}
+		}
 
+		if appProtectLogConf, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log"]; exists {
+			cfgParams.AppProtectLogConf = strings.Replace(appProtectLogConf, "/", "_", 1)
+		}
+
+	}	
 	return cfgParams
 }
 

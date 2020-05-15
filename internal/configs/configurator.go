@@ -87,13 +87,14 @@ func (cnf *Configurator) addOrUpdateIngress(ingEx *IngressEx) error {
 	jwtKeyFileName := cnf.updateJWKSecret(ingEx)
 
 	isMinion := false
-	nginxCfg := generateNginxCfg(ingEx, pems, isMinion, cnf.cfgParams, cnf.isPlus, cnf.IsResolverConfigured(), jwtKeyFileName)
+	nginxCfg := generateNginxCfg(ingEx, pems, isMinion, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.AppProtectLoadModule, cnf.IsResolverConfigured(), jwtKeyFileName)
 	if cnf.staticCfgParams.AppProtectLoadModule {
 		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
 		if len(filesNotReady) > 0 {
 			return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
 		}
 	}	
+	
 	name := objectMetaToFileName(&ingEx.Ingress.ObjectMeta)
 	content, err := cnf.templateExecutor.ExecuteIngressConfigTemplate(&nginxCfg)
 	if err != nil {
@@ -128,7 +129,7 @@ func (cnf *Configurator) addOrUpdateMergeableIngress(mergeableIngs *MergeableIng
 		minionJwtKeyFileNames[minionName] = cnf.updateJWKSecret(minion)
 	}
 
-	nginxCfg := generateNginxCfgForMergeableIngresses(mergeableIngs, masterPems, masterJwtKeyFileName, minionJwtKeyFileNames, cnf.cfgParams, cnf.isPlus, cnf.IsResolverConfigured())
+	nginxCfg := generateNginxCfgForMergeableIngresses(mergeableIngs, masterPems, masterJwtKeyFileName, minionJwtKeyFileNames, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.AppProtectLoadModule, cnf.IsResolverConfigured())
 	if cnf.staticCfgParams.AppProtectLoadModule {
 		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
 		if len(filesNotReady) > 0 {
@@ -479,7 +480,7 @@ func (cnf *Configurator) updatePlusEndpointsForVirtualServer(virtualServerEx *Vi
 }
 
 func (cnf *Configurator) updatePlusEndpoints(ingEx *IngressEx) error {
-	ingCfg := parseAnnotations(ingEx, cnf.cfgParams, cnf.isPlus)
+	ingCfg := parseAnnotations(ingEx, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.AppProtectLoadModule)
 
 	cfg := nginx.ServerConfig{
 		MaxFails:    ingCfg.MaxFails,
