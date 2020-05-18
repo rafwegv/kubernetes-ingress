@@ -3,6 +3,7 @@ FROM debian:stretch-slim
 LABEL maintainer="NGINX Docker Maintainers <docker-maint@nginx.com>"
 
 ENV APPPROTECT_VERSION 21+2.52.1-1~stretch
+ENV NGINX_PLUS_VERSION 21-1~stretch
 ARG IC_VERSION
 
 # Download certificate and key from the customer portal (https://cs.nginx.com)
@@ -43,7 +44,7 @@ RUN set -x \
   && printf "Acquire::https::app-protect-sigs.nginx.com::Verify-Host \"true\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
   && printf "Acquire::https::app-protect-sigs.nginx.com::SslCert     \"/etc/ssl/nginx/nginx-repo.crt\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
   && printf "Acquire::https::app-protect-sigs.nginx.com::SslKey      \"/etc/ssl/nginx/nginx-repo.key\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
-  && apt-get update && apt-get install -y app-protect=$APPPROTECT_VERSION \ 
+  && apt-get update && apt-get install -y nginx-plus=$NGINX_PLUS_VERSION app-protect=$APPPROTECT_VERSION \ 
    app-protect-attack-signatures \
   && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx \
   && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx-debug \
