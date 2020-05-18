@@ -589,7 +589,7 @@ func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManag
 			glog.Info("AppProtectPlugin command exited successfully")
 		}
 		nginxManager.AppProtectAgentQuit()
-		nginxManager.Quit()
+		nginxManager.Terminate()
 	case err := <-agentDone:
 		if err != nil {
 			glog.Errorf("AppProtectAgent command exited with an error: %v", err)
@@ -598,7 +598,7 @@ func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManag
 			glog.Info("AppProtectAgent command exited successfully")
 		}
 		nginxManager.AppProtectPluginQuit()
-		nginxManager.Quit()
+		nginxManager.Terminate()
 	case <-signalChan:
 		glog.Infof("Received SIGTERM, shutting down")
 		nginxManager.Quit()

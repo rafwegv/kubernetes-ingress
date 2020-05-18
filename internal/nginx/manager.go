@@ -45,6 +45,7 @@ type Manager interface {
 	Start(done chan error)
 	Reload() error
 	Quit()
+	Terminate()
 	UpdateConfigVersionFile(openTracing bool)
 	SetPlusClients(plusClient *client.NginxClient, plusConfigVersionCheckClient *http.Client)
 	UpdateServersInPlus(upstream string, servers []string, config ServerConfig) error
@@ -58,6 +59,7 @@ type Manager interface {
 // LocalManager updates NGINX configuration, starts, reloads and quits NGINX,
 // updates NGINX Plus upstream servers. It assumes that NGINX is running in the same container.
 type LocalManager struct {
+	nginxPid                     int
 	confdPath                    string
 	secretsPath                  string
 	mainConfFilename             string
@@ -74,10 +76,11 @@ type LocalManager struct {
 	metricsCollector             collectors.ManagerCollector
 	OpenTracing                  bool
 	appProtectPluginStartCmd     string
-	appProtectPluginPid      int
+	appProtectPluginPid          int
 	appProtectAgentStartCmd      string
-	appProtectAgentPid       int
+	appProtectAgentPid           int
 	appProtectPluginLog          *os.File
+	appProtectPluginParams       []string
 }
 
 // NewLocalManager creates a LocalManager.
@@ -102,6 +105,12 @@ func NewLocalManager(confPath string, binaryFilename string, mc collectors.Manag
 		metricsCollector:         mc,
 		appProtectPluginStartCmd: "/usr/share/ts/bin/bd-socket-plugin",
 		appProtectAgentStartCmd:  "/opt/app_protect/bin/bd_agent",
+		appProtectPluginParams: []string{"tmm_count", "4",
+			"proc_cpuinfo_cpu_mhz", "2000000",
+			"total_xml_memory", "307200000",
+			"total_umu_max_size", "3129344",
+			"sys_max_account_id 1024",
+			"no_static_config"},
 	}
 
 	return &manager
@@ -200,7 +209,7 @@ func (lm *LocalManager) Start(done chan error) {
 	go func() {
 		done <- cmd.Wait()
 	}()
-
+	lm.nginxPid = cmd.Process.Pid
 	err := lm.verifyClient.WaitForCorrectVersion(lm.configVersion)
 	if err != nil {
 		glog.Fatalf("Could not get newest config version: %v", err)
@@ -240,6 +249,15 @@ func (lm *LocalManager) Quit() {
 
 	if err := shellOut(lm.quitCmd); err != nil {
 		glog.Fatalf("Failed to quit nginx: %v", err)
+	}
+}
+
+// Terminate kills nginx with a SIGKILL
+func (lm *LocalManager) Terminate() {
+	glog.V(3).Info("Quitting nginx")
+	terminateCmd := fmt.Sprintf("kill -9 %d", lm.nginxPid)
+	if err := shellOut(terminateCmd); err != nil {
+		glog.Fatalf("Failed to terminate nginx: %v", err)
 	}
 }
 
@@ -363,8 +381,7 @@ func (lm *LocalManager) AppProtectPluginStart(appDone chan error) {
 	glog.V(3).Info("Starting AppProtect Plugin")
 
 	var err error
-	args := []string{"tmm_count", "4", "proc_cpuinfo_cpu_mhz", "2000000", "total_xml_memory", "307200000", "total_umu_max_size", "3129344", "sys_max_account_id 1024", "no_static_config"}
-	cmd := exec.Command(lm.appProtectPluginStartCmd, args...)
+	cmd := exec.Command(lm.appProtectPluginStartCmd, lm.appProtectPluginParams...)
 	lm.appProtectPluginLog, err = os.Create("/var/log/app_protect/bd-socket-plugin.log")
 	if err != nil {
 		glog.Fatalf("error opening AppProtect Plugin log: %v", err)

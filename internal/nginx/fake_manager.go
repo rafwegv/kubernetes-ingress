@@ -80,6 +80,11 @@ func (*FakeManager) Quit() {
 	glog.V(3).Info("Quitting nginx")
 }
 
+// Terminate provides a fake implementation of Terminate.
+func (*FakeManager) Terminate() {
+	glog.V(3).Info("Terminating nginx")
+}
+
 // UpdateConfigVersionFile provides a fake implementation of UpdateConfigVersionFile.
 func (*FakeManager) UpdateConfigVersionFile(openTracing bool) {
 	glog.V(3).Infof("Writing config version")
