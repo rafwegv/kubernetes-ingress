@@ -171,6 +171,7 @@ func main() {
 
 	glog.Infof("Starting NGINX Ingress controller Version=%v GitCommit=%v\n", version, gitCommit)
 
+	
 	var config *rest.Config
 	if *proxyURL != "" {
 		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -270,7 +271,18 @@ func main() {
 	if useFakeNginxManager {
 		nginxManager = nginx.NewFakeManager("/etc/nginx")
 	} else {
-		nginxManager = nginx.NewLocalManager("/etc/nginx/", nginxBinaryPath, managerCollector)
+		nginxManager = nginx.NewLocalManager("/etc/nginx/", nginxBinaryPath, managerCollector, *appProtect)
+	}
+
+	var aPPluginDone chan error
+	var aPAgentDone chan error
+
+	if *appProtect {
+		aPPluginDone = make(chan error, 1)
+		aPAgentDone = make(chan error, 1)
+
+		nginxManager.AppProtectAgentStart(aPAgentDone)
+		nginxManager.AppProtectPluginStart(aPPluginDone)
 	}
 
 	if *defaultServerSecret != "" {
@@ -362,16 +374,6 @@ func main() {
 	nginxDone := make(chan error, 1)
 	nginxManager.Start(nginxDone)
 
-	var aPPluginDone chan error
-	var aPAgentDone chan error
-
-	if *appProtect {
-		aPPluginDone = make(chan error, 1)
-		aPAgentDone = make(chan error, 1)
-
-		nginxManager.AppProtectAgentStart(aPAgentDone)
-		nginxManager.AppProtectPluginStart(aPPluginDone)
-	}
 
 	var plusClient *client.NginxClient
 	if *nginxPlus && !useFakeNginxManager {

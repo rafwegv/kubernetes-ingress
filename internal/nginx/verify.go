@@ -21,7 +21,13 @@ type verifyClient struct {
 }
 
 // newVerifyClient returns a new client pointed at the config version socket.
-func newVerifyClient() *verifyClient {
+func newVerifyClient(appProtectEnabled bool) *verifyClient {
+	var maxret int
+	if appProtectEnabled {
+		maxret = 800
+	} else {
+		maxret = 160
+	}
 	return &verifyClient{
 		client: &http.Client{
 			Transport: &http.Transport{
@@ -30,7 +36,7 @@ func newVerifyClient() *verifyClient {
 				},
 			},
 		},
-		maxRetries: 160,
+		maxRetries: maxret,
 	}
 }
 

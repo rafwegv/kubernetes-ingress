@@ -84,7 +84,7 @@ type LocalManager struct {
 }
 
 // NewLocalManager creates a LocalManager.
-func NewLocalManager(confPath string, binaryFilename string, mc collectors.ManagerCollector) *LocalManager {
+func NewLocalManager(confPath string, binaryFilename string, mc collectors.ManagerCollector, appProtectEnabled bool) *LocalManager {
 	verifyConfigGenerator, err := newVerifyConfigGenerator()
 	if err != nil {
 		glog.Fatalf("error instantiating a verifyConfigGenerator: %v", err)
@@ -99,7 +99,7 @@ func NewLocalManager(confPath string, binaryFilename string, mc collectors.Manag
 		binaryFilename:           binaryFilename,
 		verifyConfigGenerator:    verifyConfigGenerator,
 		configVersion:            0,
-		verifyClient:             newVerifyClient(),
+		verifyClient:             newVerifyClient(appProtectEnabled),
 		reloadCmd:                fmt.Sprintf("%v -s %v", binaryFilename, "reload"),
 		quitCmd:                  fmt.Sprintf("%v -s %v", binaryFilename, "quit"),
 		metricsCollector:         mc,
