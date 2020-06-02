@@ -1,12 +1,8 @@
-{{- if .Values.rbac.create }}
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: {{ include "nginx-ingress.name" . }}
-  labels:
-    {{- include "nginx-ingress.labels" . | nindent 4 }}
+  name: nginx-ingress
 rules:
-{{- if .Values.controller.appprotect}}
 - apiGroups: 
   - appprotect.f5.com
   resources: 
@@ -16,7 +12,6 @@ rules:
   - "get" 
   - "watch" 
   - "list"
-{{- end}}
 - apiGroups:
   - ""
   resources:
@@ -42,10 +37,8 @@ rules:
   - get
   - list
   - watch
-{{- if .Values.controller.reportIngressStatus.enableLeaderElection }}
   - update
   - create
-{{- end }}
 - apiGroups:
   - ""
   resources:
@@ -65,18 +58,15 @@ rules:
   resources:
   - ingresses
   verbs:
-  - get
   - list
   - watch
-{{- if .Values.controller.reportIngressStatus.enable }}
+  - get
 - apiGroups:
-  - extensions
+  - "extensions"
   resources:
   - ingresses/status
   verbs:
   - update
-{{- end }}
-{{- if .Values.controller.enableCustomResources }}
 - apiGroups:
   - k8s.nginx.org
   resources:
@@ -86,20 +76,16 @@ rules:
   - list
   - watch
   - get
-{{- end }}
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: {{ include "nginx-ingress.name" . }}
-  labels:
-    {{- include "nginx-ingress.labels" . | nindent 4 }}
+  name: nginx-ingress
 subjects:
 - kind: ServiceAccount
-  name: {{ include "nginx-ingress.serviceAccountName" . }}
-  namespace: {{ .Release.Namespace }}
+  name: nginx-ingress
+  namespace: nginx-ingress
 roleRef:
   kind: ClusterRole
-  name: {{ include "nginx-ingress.name" . }}
+  name: nginx-ingress
   apiGroup: rbac.authorization.k8s.io
-{{- end }}
