@@ -5,12 +5,13 @@ LABEL maintainer="NGINX Docker Maintainers <docker-maint@nginx.com>"
 ENV APPPROTECT_VERSION 21+2.52.1-1~stretch
 ENV NGINX_PLUS_VERSION 21-1~stretch
 ARG IC_VERSION
+ARG SIG_VERSION
 
 # Download certificate and key from the customer portal (https://cs.nginx.com)
 # and copy to the build context
 COPY nginx-repo.crt /etc/ssl/nginx/
 COPY nginx-repo.key /etc/ssl/nginx/
-COPY app-protect-sigs .
+COPY build/appprotect/app-protect-sigs .
 
 # Make sure the certificate and key have correct permissions
 RUN chmod 644 /etc/ssl/nginx/*
@@ -36,22 +37,23 @@ RUN set -x \
   && echo "Acquire::https::plus-pkgs.nginx.com::Verify-Host \"true\";" >> /etc/apt/apt.conf.d/90nginx \
   && echo "Acquire::https::plus-pkgs.nginx.com::SslCert     \"/etc/ssl/nginx/nginx-repo.crt\";" >> /etc/apt/apt.conf.d/90nginx \
   && echo "Acquire::https::plus-pkgs.nginx.com::SslKey      \"/etc/ssl/nginx/nginx-repo.key\";" >> /etc/apt/apt.conf.d/90nginx \
-  && echo "Acquire::https::plus-pkgs.nginx.com::User-Agent  \"k8s-ic-$APPPROTECT_VERSION-apt\";" >> /etc/apt/apt.conf.d/90nginx \
-  && printf "deb https://plus-pkgs.nginx.com/debian stretch nginx-plus\n" > /etc/apt/sources.list.d/nginx-plus.list \
-  && printf "deb https://app-protect-sigs.nginx.com/debian/ stretch nginx-plus\n" | tee /etc/apt/sources.list.d/app-protect-sigs.list \
+  && echo "Acquire::https::plus-pkgs.nginx.com::User-Agent  \"k8s-ic-$IC_VERSION-app-$APPPROTECT_VERSION-apt\";" >> /etc/apt/apt.conf.d/90nginx \
+  && echo "deb https://plus-pkgs.nginx.com/debian stretch nginx-plus\n" > /etc/apt/sources.list.d/nginx-plus.list \
+  && echo "deb https://app-protect-sigs.nginx.com/debian/ stretch nginx-plus\n" | tee /etc/apt/sources.list.d/app-protect-sigs.list \
   && apt-key add app-protect-sigs \
-  && printf "Acquire::https::app-protect-sigs.nginx.com::Verify-Peer \"true\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
-  && printf "Acquire::https::app-protect-sigs.nginx.com::Verify-Host \"true\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
-  && printf "Acquire::https::app-protect-sigs.nginx.com::SslCert     \"/etc/ssl/nginx/nginx-repo.crt\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
-  && printf "Acquire::https::app-protect-sigs.nginx.com::SslKey      \"/etc/ssl/nginx/nginx-repo.key\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
+  && echo "Acquire::https::app-protect-sigs.nginx.com::Verify-Peer \"true\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
+  && echo "Acquire::https::app-protect-sigs.nginx.com::Verify-Host \"true\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
+  && echo "Acquire::https::app-protect-sigs.nginx.com::SslCert     \"/etc/ssl/nginx/nginx-repo.crt\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
+  && echo "Acquire::https::app-protect-sigs.nginx.com::SslKey      \"/etc/ssl/nginx/nginx-repo.key\";" >> /etc/apt/apt.conf.d/90app-protect-sigs \
   && apt-get update && apt-get install -y nginx-plus=$NGINX_PLUS_VERSION app-protect=$APPPROTECT_VERSION \ 
-   app-protect-attack-signatures \
+   app-protect-attack-signatures${SIG_VERSION:+=$SIG_VERSION} \
   && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx \
   && setcap 'cap_net_bind_service=+ep' /usr/sbin/nginx-debug \
   && apt-get remove --purge --auto-remove -y gnupg1 \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /etc/ssl/nginx \
-  && rm /etc/apt/apt.conf.d/90nginx /etc/apt/sources.list.d/nginx-plus.list
+  && rm /etc/apt/apt.conf.d/90nginx /etc/apt/sources.list.d/nginx-plus.list \
+  && rm /etc/apt/apt.conf.d/90app-protect-sigs 
 
 RUN usermod -u 101 nginx \
   && groupmod -g 101 nginx
@@ -69,21 +71,18 @@ RUN  mkdir -p /var/lib/nginx \
   && mkdir -p /etc/nginx/waf/nac-logconfs \
   && mkdir -p /var/log/app_protect \
   && mkdir -p /opt/app_protect \
-  && chown -R nginx:nginx /etc/app_protect \
-  && chown -R nginx:nginx /opt/app_protect/pipe \
-  && chown -R nginx:nginx /usr/share/ts \
-  && chown -R nginx:nginx /etc/nginx/secrets \
-  && chown -R nginx:nginx /etc/nginx/waf \
-  && chown -R nginx:nginx /etc/nginx \
-  && chown -R nginx:nginx /var/cache/nginx \
-  && chown -R nginx:nginx /var/lib/nginx/ \
-  && chown -R nginx:nginx /var/log/app_protect/ \
-  && chown -R nginx:nginx /opt/app_protect/ \
-  && chown -R nginx:nginx /var/log/nginx/ \
+  && chown -R nginx:0 /etc/app_protect \
+  && chown -R nginx:0 /usr/share/ts \
+  && chown -R nginx:0 /etc/nginx \
+  && chown -R nginx:0 /var/cache/nginx \
+  && chown -R nginx:0 /var/lib/nginx/ \
+  && chown -R nginx:0 /var/log/app_protect/ \
+  && chown -R nginx:0 /opt/app_protect/ \
+  && chown -R nginx:0 /var/log/nginx/ \
+  && apt-get remove --purge -y libcap2-bin \
   && rm /etc/nginx/conf.d/*
 
-COPY log-default.json /etc/nginx
-RUN chown nginx:nginx /etc/nginx/log-default.json
+COPY --chown=nginx:0 build/appprotect/log-default.json /etc/nginx  
 
 EXPOSE 80 443
 

@@ -15,6 +15,7 @@ BUILD_IN_CONTAINER = 1
 PUSH_TO_GCR =
 GENERATE_DEFAULT_CERT_AND_KEY =
 DOCKER_BUILD_OPTIONS =
+APP_PROTECT_SIG_VERSION = 
 
 GIT_COMMIT=$(shell git rev-parse --short HEAD)
 
@@ -50,7 +51,7 @@ endif
 
 container: test verify-codegen nginx-ingress certificate-and-key
 	cp $(DOCKERFILEPATH)/$(DOCKERFILE) ./Dockerfile
-	docker build $(DOCKER_BUILD_OPTIONS) --build-arg IC_VERSION=$(VERSION)-$(GIT_COMMIT) -f Dockerfile -t $(PREFIX):$(TAG) .
+	docker build $(DOCKER_BUILD_OPTIONS) --no-cache --build-arg IC_VERSION=$(VERSION)-$(GIT_COMMIT) --build-arg SIG_VERSION=$(APP_PROTECT_SIG_VERSION) -f Dockerfile -t $(PREFIX):$(TAG) .
 
 push: container
 ifeq ($(PUSH_TO_GCR),1)
