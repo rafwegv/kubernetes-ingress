@@ -1,12 +1,12 @@
-# Example
+# NGINX App Protect Support
 
-In this example we deploy the NGINX Plus Ingress controller with App-Protect, a simple web application and then configure load balancing for that application using the Ingress resource.
+In this example we deploy the NGINX Plus Ingress controller with [NGINX App Protect](https://www.nginx.com/products/nginx-app-protect/), a simple web application and then configure load balancing and WAF protection for that application using the Ingress resource.
 
 ## Running the Example
 
 ## 1. Deploy the Ingress Controller
 
-1. Follow the installation [instructions](../../docs/installation.md) to deploy the Ingress controller.
+1. Follow the installation [instructions](../../docs/installation.md) to deploy the Ingress controller with NGINX App Protect.
 
 2. Save the public IP address of the Ingress controller into a shell variable:
     ```
@@ -32,14 +32,14 @@ $ kubectl create -f cafe.yaml
     ```
 2. Create the App-Protect policy and log configuration:
     ```
-    kubectl create -f dataguard_alarm.yaml
+    kubectl create -f dataguard-alarm.yaml
     kubectl create -f logconf.yaml
     ```
 3. Create an Ingress resource:
     ```
     $ kubectl create -f cafe-ingress.yaml
     ```
-    Note the annotations to the ingress. They enable and configure App-Protect with the policy and log configuration created in the last step.
+    Note the App Protect annotations in the Ingress resource. They enable WAF protection by configuring App Protect with the policy and log configuration created in the previous step.
 
 ## 4. Test the Application
 
@@ -60,14 +60,11 @@ certificate and the --resolve option to set the Host header of a request with ``
     Server name: tea-7cd44fcb4d-xfw2x
     ...
     ```
-    Now, Let's try something suspicious:
+    Now, let's try to send a suspicious request:
    ```
     $ curl --resolve cafe.example.com:$IC_HTTPS_PORT:$IC_IP 'https://cafe.example.com:$IC_HTTPS_PORT/tea/<script>' --insecure
     <html><head><title>Request Rejected</title></head><body>
     ...
     ```    
-    As You can see the suspicious request was blocked by App-Protect
+    As you can see, the suspicious request was blocked by App Protect
     
-1. You can view an NGINX status page, either stub_status for NGINX, or the Live Activity Monitoring Dashboard for NGINX Plus:
-    1. Follow the [instructions](../../docs/installation.md#5-access-the-live-activity-monitoring-dashboard--stub_status-page) to access the status page.
-    2. For NGINX Plus, If you go to the Upstream tab, you'll see: ![dashboard](dashboard.png)

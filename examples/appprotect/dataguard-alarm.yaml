@@ -2,6 +2,7 @@ apiVersion: appprotect.f5.com/v1beta1
 kind: APPolicy
 metadata: 
   name: dataguard-alarm
+  namespace: nginx-ingress
 spec:
   policy:
     applicationLanguage: utf-8
@@ -20,6 +21,6 @@ spec:
       maskData: true
       usSocialSecurityNumbers: true
     enforcementMode: blocking 
-    name: dataguard_alarm
+    name: dataguard-alarm
     template: 
       name: POLICY_TEMPLATE_NGINX_BASE
