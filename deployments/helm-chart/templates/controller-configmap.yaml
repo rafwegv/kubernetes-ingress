@@ -5,7 +5,7 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "nginx-ingress.labels" . | nindent 4 }}
-data: 
+data:
 {{- if .Values.controller.config.entries }}
 {{ toYaml .Values.controller.config.entries | indent 2 }}
 {{- end }}

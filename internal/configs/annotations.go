@@ -308,31 +308,31 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 		}
 	}
 
-	if hasAppProtect {
-		if failTimeout, exists := ingEx.Ingress.Annotations["nginx.org/fail-timeout"]; exists {
-			cfgParams.FailTimeout = failTimeout
-		}
+	if failTimeout, exists := ingEx.Ingress.Annotations["nginx.org/fail-timeout"]; exists {
+		cfgParams.FailTimeout = failTimeout
+	}
 
-		if appProtectEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_enable"]; exists {
-			if appProtectEnable == "on" {
-				cfgParams.AppProtectEnable = true
+	if hasAppProtect {
+		if appProtectEnable, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "appprotect.f5.com/app-protect-enable", ingEx.Ingress); exists {
+			if err != nil {
+				glog.Error(err)
 			} else {
-				cfgParams.AppProtectEnable = false
+				cfgParams.AppProtectEnable = appProtectEnable
 			}
 		}
-		if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_policy"]; exists {
+		if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app-protect-policy"]; exists {
 			cfgParams.AppProtectPolicy = strings.Replace(appProtectPolicy, "/", "_", 1)
 		}
 
-		if appProtectLogEnable, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log_enable"]; exists {
-			if appProtectLogEnable == "on" {
-				cfgParams.AppProtectLogEnable = true
+		if appProtectLogEnable, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "appprotect.f5.com/app-protect-security-log-enable", ingEx.Ingress); exists {
+			if err != nil {
+				glog.Error(err)
 			} else {
-				cfgParams.AppProtectLogEnable = false
+				cfgParams.AppProtectEnable = appProtectLogEnable
 			}
 		}
 
-		if appProtectLogConf, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app_protect_security_log"]; exists {
+		if appProtectLogConf, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app-protect-security-log"]; exists {
 			cfgParams.AppProtectLogConf = strings.Replace(appProtectLogConf, "/", "_", 1)
 		}
 

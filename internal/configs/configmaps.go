@@ -423,32 +423,32 @@ func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool) *ConfigParams {
 		}
 	}
 
-	if appProtectFailureModeAction, exists := cfgm.Data["app_protect_failure_mode_action"]; exists {
+	if appProtectFailureModeAction, exists := cfgm.Data["app-protect-failure-mode-action"]; exists {
 		if appProtectFailureModeAction == "pass" || appProtectFailureModeAction == "drop" {
 		cfgParams.AppProtectFailureModeAction = appProtectFailureModeAction
 		} else {
-			glog.Error("ConfigMap Key 'app_protect_failure_mode_action' must have value 'pass' or 'drop'. Ignoring.")
+			glog.Error("ConfigMap Key 'app-protect-failure-mode-action' must have value 'pass' or 'drop'. Ignoring.")
 		}
 	}
 	
-	if appProtectCookieSeed, exists := cfgm.Data["app_protect_cookie_seed"]; exists {
+	if appProtectCookieSeed, exists := cfgm.Data["app-protect-cookie-seed"]; exists {
 		cfgParams.AppProtectCookieSeed = appProtectCookieSeed
 	}
 	
-	if appProtectCPUThresholds, exists := cfgm.Data["app_protect_cpu_thresholds"]; exists {
+	if appProtectCPUThresholds, exists := cfgm.Data["app-protect-cpu-thresholds"]; exists {
 		if VerifyThresholds(appProtectCPUThresholds) {
 		cfgParams.AppProtectCPUThresholds = appProtectCPUThresholds
 		} else {
-			glog.Error("ConfigMap Key 'app_protect_cpu_thresholds' must follow pattern: 'high=<number_0-100> low=<number_0-100>'. Ignoring.")
+			glog.Error("ConfigMap Key 'app-protect-cpu-thresholds' must follow pattern: 'high=<number 0-100> low=<number 0-100>'. Ignoring.")
 		}
 	}
 	
-	if appProtectPhysicalMemoryThresholds, exists := cfgm.Data["app_protect_physical_memory_util_thresholds"]; exists {
+	if appProtectPhysicalMemoryThresholds, exists := cfgm.Data["app-protect-physical-memory-util-thresholds"]; exists {
 		cfgParams.AppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
 		if VerifyThresholds(appProtectPhysicalMemoryThresholds) {
 			cfgParams.AppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
 			} else {
-				glog.Error("ConfigMap Key 'app_protect_physical_memory_thresholds' must follow pattern: 'high=<number_0-100> low=<number_0-100>'. Ignoring.")
+				glog.Error("ConfigMap Key 'app-protect-physical-memory-thresholds' must follow pattern: 'high=<number-0-100> low=<number-0-100>'. Ignoring.")
 			}	
 	}	
 

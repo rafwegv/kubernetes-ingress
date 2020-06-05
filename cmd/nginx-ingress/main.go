@@ -62,7 +62,7 @@ var (
 
 	nginxPlus = flag.Bool("nginx-plus", false, "Enable support for NGINX Plus")
 
-	appProtect = flag.Bool("app-protect", false, "Enable support for App-Protect")
+	appProtect = flag.Bool("enable-app-protect", false, "Enable support for NGINX App Protect. Requires -nginx-plus.")
 
 	ingressClass = flag.String("ingress-class", "nginx",
 		`A class of the Ingress controller. The Ingress controller only processes Ingress resources that belong to its class
@@ -169,6 +169,10 @@ func main() {
 		glog.Fatalf(`Invalid value for nginx-status-allow-cidrs: %v`, err)
 	}
 
+	if (*appProtect && ! *nginxPlus) {
+		glog.Fatal("NGINX App Protect support is for NGINX Plus only")
+	}
+	
 	glog.Infof("Starting NGINX Ingress controller Version=%v GitCommit=%v\n", version, gitCommit)
 
 	

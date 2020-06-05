@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "nginx-ingress.labels" . | nindent 4 }}
 rules:
-{{- if .Values.controller.appprotect}}
+{{- if .Values.controller.appprotect }}
 - apiGroups: 
   - appprotect.f5.com
   resources: 
@@ -16,7 +16,7 @@ rules:
   - "get" 
   - "watch" 
   - "list"
-{{- end}}
+{{- end }}
 - apiGroups:
   - ""
   resources:

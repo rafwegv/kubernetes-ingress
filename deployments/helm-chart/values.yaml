@@ -40,11 +40,7 @@ controller:
     # name: nginx-config
 
     ## The entries of the ConfigMap for customizing NGINX configuration.
-    entries:
-      app_protect_cookie_seed: "wefwe879w8ef7w98e7fw98efw98e7f9we7fa09dfes3f4se0gsvsd5efsef2sef4sefsfsd0bhmii0"
-      #app_protect_failure_mode_action: "drop"
-      #app_protect_physical_memory_util_thresholds: "high=90 low=20"
-      #app_protect_cpu_thresholds: "high=90 low=20"
+    entries: {}
 
   ## It is recommended to use your own TLS certificates and keys
   defaultTLS:

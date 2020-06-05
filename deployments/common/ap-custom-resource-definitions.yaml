@@ -5,7 +5,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.2.5
   creationTimestamp: null
   name: aplogconfs.appprotect.f5.com
-  labels: {}
 spec:
   group: appprotect.f5.com
   names:
@@ -60,9 +59,7 @@ spec:
                   type: string
               type: object
           type: object
-        status:
-          description: APLogConfStatus defines the observed state of APLogConf
-          type: object
+          x-kubernetes-preserve-unknown-fields: false
       type: object
   version: v1beta1
   versions:
@@ -83,7 +80,6 @@ metadata:
     controller-gen.kubebuilder.io/version: v0.2.5
   creationTimestamp: null
   name: appolicies.appprotect.f5.com
-  labels: {}
 spec:
   group: appprotect.f5.com
   names:
@@ -92,8 +88,6 @@ spec:
     plural: appolicies
     singular: appolicy
   scope: Namespaced
-  subresources:
-    status: {}
   validation:
     openAPIV3Schema:
       description: APPolicyConfig is the Schema for the APPolicyconfigs API
@@ -755,15 +749,7 @@ spec:
                     type: object
                   type: array
               type: object
-          type: object
-        status:
-          description: APPolicyConfigStatus defines the observed state of APPolicyConfig
-          properties:
-            usages:
-              description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                of cluster Important: Run "make" to regenerate code after modifying
-                this file'
-              type: integer
+              x-kubernetes-preserve-unknown-fields: false
           type: object
       type: object
   version: v1beta1
@@ -777,3 +763,4 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+---
