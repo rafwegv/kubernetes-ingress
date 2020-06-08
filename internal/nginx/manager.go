@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/nginxinc/kubernetes-ingress/internal/metrics/collectors"
@@ -22,6 +23,9 @@ const JWKSecretFileMode = 0644
 
 const configFileMode = 0644
 const jsonFileForOpenTracingTracer = "/var/lib/nginx/tracer-config.json"
+
+//Configuration of App-Protect plugin
+const apPluginParams = "tmm_count 4 proc_cpuinfo_cpu_mhz 2000000 total_xml_memory 307200000 total_umu_max_size 3129344 sys_max_account_id 1024 no_static_config"
 
 // ServerConfig holds the config data for an upstream server in NGINX Plus.
 type ServerConfig struct {
@@ -80,7 +84,7 @@ type LocalManager struct {
 	appProtectAgentStartCmd      string
 	appProtectAgentPid           int
 	appProtectPluginLog          *os.File
-	appProtectPluginParams       []string
+	appProtectPluginParams       string
 }
 
 // NewLocalManager creates a LocalManager.
@@ -105,12 +109,7 @@ func NewLocalManager(confPath string, binaryFilename string, mc collectors.Manag
 		metricsCollector:         mc,
 		appProtectPluginStartCmd: "/usr/share/ts/bin/bd-socket-plugin",
 		appProtectAgentStartCmd:  "/opt/app_protect/bin/bd_agent",
-		appProtectPluginParams: []string{"tmm_count", "4",
-			"proc_cpuinfo_cpu_mhz", "2000000",
-			"total_xml_memory", "307200000",
-			"total_umu_max_size", "3129344",
-			"sys_max_account_id 1024",
-			"no_static_config"},
+		appProtectPluginParams:   apPluginParams,
 	}
 
 	return &manager
@@ -379,9 +378,9 @@ func (lm *LocalManager) AppProtectAgentQuit() {
 // AppProtectPluginStart starts the AppProtect plugin.
 func (lm *LocalManager) AppProtectPluginStart(appDone chan error) {
 	glog.V(3).Info("Starting AppProtect Plugin")
-
+	startupParams := strings.Fields(lm.appProtectPluginParams)
 	var err error
-	cmd := exec.Command(lm.appProtectPluginStartCmd, lm.appProtectPluginParams...)
+	cmd := exec.Command(lm.appProtectPluginStartCmd, startupParams...)
 	lm.appProtectPluginLog, err = os.Create("/var/log/app_protect/bd-socket-plugin.log")
 	if err != nil {
 		glog.Fatalf("error opening AppProtect Plugin log: %v", err)

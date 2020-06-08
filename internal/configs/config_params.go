@@ -3,74 +3,73 @@ package configs
 // ConfigParams holds NGINX configuration parameters that affect the main NGINX config
 // as well as configs for Ingress resources.
 type ConfigParams struct {
-	LocationSnippets              []string
-	ServerSnippets                []string
-	ServerTokens                  string
-	ProxyConnectTimeout           string
-	ProxyReadTimeout              string
-	ProxySendTimeout              string
-	ClientMaxBodySize             string
-	HTTP2                         bool
-	RedirectToHTTPS               bool
-	SSLRedirect                   bool
-	MainMainSnippets              []string
-	MainHTTPSnippets              []string
-	MainStreamSnippets            []string
-	MainServerNamesHashBucketSize string
-	MainServerNamesHashMaxSize    string
-	MainAccessLogOff              bool
-	MainLogFormat                 string
-	MainErrorLogLevel             string
-	MainStreamLogFormat           string
-	ProxyBuffering                bool
-	ProxyBuffers                  string
-	ProxyBufferSize               string
-	ProxyMaxTempFileSize          string
-	ProxyProtocol                 bool
-	ProxyHideHeaders              []string
-	ProxyPassHeaders              []string
-	UpstreamZoneSize              string
-	HSTS                          bool
-	HSTSBehindProxy               bool
-	HSTSMaxAge                    int64
-	HSTSIncludeSubdomains         bool
-	LBMethod                      string
-	MainWorkerProcesses           string
-	MainWorkerCPUAffinity         string
-	MainWorkerShutdownTimeout     string
-	MainWorkerConnections         string
-	MainWorkerRlimitNofile        string
-	Keepalive                     int
-	MaxFails                      int
-	MaxConns                      int
-	FailTimeout                   string
-	HealthCheckEnabled            bool
-	HealthCheckMandatory          bool
-	HealthCheckMandatoryQueue     int64
-	SlowStart                     string
-	ResolverAddresses             []string
-	ResolverIPV6                  bool
-	ResolverValid                 string
-	ResolverTimeout               string
-	MainKeepaliveTimeout          string
-	MainKeepaliveRequests         int64
-	VariablesHashBucketSize       uint64
-	VariablesHashMaxSize          uint64
-	MainOpenTracingLoadModule     bool
-	MainOpenTracingEnabled        bool
-	MainOpenTracingTracer         string
-	MainOpenTracingTracerConfig   string
-	AppProtectLoadModule		  bool
-	AppProtectEnable              bool
-	AppProtectPolicy              string
-	AppProtectLogConf             string
-	AppProtectLogEnable           bool
-	AppProtectFailureModeAction   string
-	AppProtectCookieSeed          string
-	AppProtectCPUThresholds       string
-    AppProtectPhysicalMemoryThresholds string
+	LocationSnippets                       []string
+	ServerSnippets                         []string
+	ServerTokens                           string
+	ProxyConnectTimeout                    string
+	ProxyReadTimeout                       string
+	ProxySendTimeout                       string
+	ClientMaxBodySize                      string
+	HTTP2                                  bool
+	RedirectToHTTPS                        bool
+	SSLRedirect                            bool
+	MainMainSnippets                       []string
+	MainHTTPSnippets                       []string
+	MainStreamSnippets                     []string
+	MainServerNamesHashBucketSize          string
+	MainServerNamesHashMaxSize             string
+	MainAccessLogOff                       bool
+	MainLogFormat                          string
+	MainErrorLogLevel                      string
+	MainStreamLogFormat                    string
+	ProxyBuffering                         bool
+	ProxyBuffers                           string
+	ProxyBufferSize                        string
+	ProxyMaxTempFileSize                   string
+	ProxyProtocol                          bool
+	ProxyHideHeaders                       []string
+	ProxyPassHeaders                       []string
+	UpstreamZoneSize                       string
+	HSTS                                   bool
+	HSTSBehindProxy                        bool
+	HSTSMaxAge                             int64
+	HSTSIncludeSubdomains                  bool
+	LBMethod                               string
+	MainWorkerProcesses                    string
+	MainWorkerCPUAffinity                  string
+	MainWorkerShutdownTimeout              string
+	MainWorkerConnections                  string
+	MainWorkerRlimitNofile                 string
+	Keepalive                              int
+	MaxFails                               int
+	MaxConns                               int
+	FailTimeout                            string
+	HealthCheckEnabled                     bool
+	HealthCheckMandatory                   bool
+	HealthCheckMandatoryQueue              int64
+	SlowStart                              string
+	ResolverAddresses                      []string
+	ResolverIPV6                           bool
+	ResolverValid                          string
+	ResolverTimeout                        string
+	MainKeepaliveTimeout                   string
+	MainKeepaliveRequests                  int64
+	VariablesHashBucketSize                uint64
+	VariablesHashMaxSize                   uint64
+	MainOpenTracingLoadModule              bool
+	MainOpenTracingEnabled                 bool
+	MainOpenTracingTracer                  string
+	MainOpenTracingTracerConfig            string
+	AppProtectEnable                       string
+	AppProtectPolicy                       string
+	AppProtectLogConf                      string
+	AppProtectLogEnable                    string
+	MainAppProtectFailureModeAction        string
+	MainAppProtectCookieSeed               string
+	MainAppProtectCPUThresholds            string
+	MainAppProtectPhysicalMemoryThresholds string
 
- 	RealIPHeader    string
+	RealIPHeader    string
 	SetRealIPFrom   []string
 	RealIPRecursive bool
 
@@ -100,8 +99,7 @@ type StaticConfigParams struct {
 	NginxStatusAllowCIDRs          []string
 	NginxStatusPort                int
 	StubStatusOverUnixSocketForOSS bool
-	AppProtectLoadModule		   bool
-
+	MainAppProtectLoadModule       bool
 }
 
 // NewDefaultConfigParams creates a ConfigParams with default values.

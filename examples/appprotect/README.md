@@ -62,7 +62,7 @@ certificate and the --resolve option to set the Host header of a request with ``
     ```
     Now, let's try to send a suspicious request:
    ```
-    $ curl --resolve cafe.example.com:$IC_HTTPS_PORT:$IC_IP 'https://cafe.example.com:$IC_HTTPS_PORT/tea/<script>' --insecure
+    $ curl --resolve cafe.example.com:$IC_HTTPS_PORT:$IC_IP "https://cafe.example.com:$IC_HTTPS_PORT/tea/<script>" --insecure
     <html><head><title>Request Rejected</title></head><body>
     ...
     ```    

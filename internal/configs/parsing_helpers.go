@@ -18,8 +18,6 @@ type apiObject interface {
 	runtime.Object
 }
 
-var threshEx =  regexp.MustCompile(`high=([1-9]|[1-9][0-9]|100) low=([1-9]|[1-9][0-9]|100)`)
-
 // GetMapKeyAsBool searches the map for the given key and parses the key as bool.
 func GetMapKeyAsBool(m map[string]string, key string, context apiObject) (bool, bool, error) {
 	if str, exists := m[key]; exists {
@@ -189,7 +187,9 @@ func ParseTime(s string) (string, error) {
 	return "", errors.New("Invalid time string")
 }
 
+var threshEx = regexp.MustCompile(`high=([1-9]|[1-9][0-9]|100) low=([1-9]|[1-9][0-9]|100)`)
+
 //VerifyThresholds ensures that threshold values are set correctly
-func VerifyThresholds(p string) bool { 
+func VerifyThresholds(p string) bool {
 	return threshEx.MatchString(p)
 }

@@ -379,7 +379,7 @@ func createVirtualServerRouteHandlers(lbc *LoadBalancerController) cache.Resourc
 	}
 }
 
-func createAppProtectConfigHandlerfuncs(lbc *LoadBalancerController) cache.ResourceEventHandlerFuncs {
+func createAppProtectPolicyHandlers(lbc *LoadBalancerController) cache.ResourceEventHandlerFuncs {
 	handlers := cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				pol := obj.(*unstructured.Unstructured)
@@ -387,14 +387,15 @@ func createAppProtectConfigHandlerfuncs(lbc *LoadBalancerController) cache.Resou
 				lbc.AddSyncQueue(pol)
 			},
 			UpdateFunc: func(oldObj, obj interface{}) {
-				oldpol := oldObj.(*unstructured.Unstructured)
-				newpol := obj.(*unstructured.Unstructured)
-				updated, err := compareSpecs(oldpol, newpol)
+				oldPol := oldObj.(*unstructured.Unstructured)
+				newPol := obj.(*unstructured.Unstructured)
+				updated, err := compareSpecs(oldPol, newPol)
 				if err != nil {
 					glog.V(3).Infof("Error when comparing policy %v", err)
 				}
 				if updated {
-					lbc.AddSyncQueue(newpol)
+					glog.V(3).Infof("ApPolicy %v changed, syncing", oldPol.GetName())
+					lbc.AddSyncQueue(newPol)
 				}
 			},
 			DeleteFunc: func(obj interface{}) {
@@ -406,7 +407,7 @@ func createAppProtectConfigHandlerfuncs(lbc *LoadBalancerController) cache.Resou
 }	
 
 func compareSpecs(oldresource, resource *unstructured.Unstructured) (bool, error) {
-	oldspec, found, err := unstructured.NestedMap(oldresource.Object, "spec")
+	oldSpec, found, err := unstructured.NestedMap(oldresource.Object, "spec")
 	if ! found {
 		glog.V(3).Infof("Warning, oldspec has unexpected format")
 	}
@@ -420,28 +421,27 @@ func compareSpecs(oldresource, resource *unstructured.Unstructured) (bool, error
 	if err != nil {
 		return false, err
 	}
-	eq := reflect.DeepEqual(oldspec, spec)
+	eq := reflect.DeepEqual(oldSpec, spec)
 	if eq {
-		glog.V(3).Infof("new spec same as old spec")
-	} else {
-		return true, nil
+		glog.V(3).Infof("New spec of %v same as old spec", oldresource.GetName())
 	}
-	return false, nil
+	return ! eq, nil
 }
 
-func createAppProtectLogConfHandlerfuncs(lbc *LoadBalancerController) cache.ResourceEventHandlerFuncs {
+func createAppProtectLogConfHandlers(lbc *LoadBalancerController) cache.ResourceEventHandlerFuncs {
 	handlers := cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			conf := obj.(*unstructured.Unstructured)
-			glog.V(3).Infof("Adding AppProtectPolicy: %v", conf.GetName())
+			glog.V(3).Infof("Adding AppProtectLogConf: %v", conf.GetName())
 			lbc.AddSyncQueue(conf)
 		},
 		UpdateFunc: func(oldObj, obj interface{}) {
-			oldconf := oldObj.(*unstructured.Unstructured)
-			newconf := obj.(*unstructured.Unstructured)
-			updated, err := compareSpecs(oldconf, newconf)
+			oldConf := oldObj.(*unstructured.Unstructured)
+			newConf := obj.(*unstructured.Unstructured)
+			updated, err := compareSpecs(oldConf, newConf)
 			if updated {
-				lbc.AddSyncQueue(newconf)
+				glog.V(3).Infof("ApLogConf %v changed, syncing", oldConf.GetName())
+				lbc.AddSyncQueue(newConf)
 			}
 			if err != nil {
 				glog.V(3).Infof("Error when comparing LogConfs %v", err)

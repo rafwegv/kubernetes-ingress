@@ -87,8 +87,8 @@ func (cnf *Configurator) addOrUpdateIngress(ingEx *IngressEx) error {
 	jwtKeyFileName := cnf.updateJWKSecret(ingEx)
 
 	isMinion := false
-	nginxCfg := generateNginxCfg(ingEx, pems, isMinion, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.AppProtectLoadModule, cnf.IsResolverConfigured(), jwtKeyFileName)
-	if cnf.staticCfgParams.AppProtectLoadModule {
+	nginxCfg := generateNginxCfg(ingEx, pems, isMinion, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.MainAppProtectLoadModule, cnf.IsResolverConfigured(), jwtKeyFileName)
+	if cnf.staticCfgParams.MainAppProtectLoadModule {
 		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
 		if len(filesNotReady) > 0 {
 			return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
@@ -129,8 +129,8 @@ func (cnf *Configurator) addOrUpdateMergeableIngress(mergeableIngs *MergeableIng
 		minionJwtKeyFileNames[minionName] = cnf.updateJWKSecret(minion)
 	}
 
-	nginxCfg := generateNginxCfgForMergeableIngresses(mergeableIngs, masterPems, masterJwtKeyFileName, minionJwtKeyFileNames, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.AppProtectLoadModule, cnf.IsResolverConfigured())
-	if cnf.staticCfgParams.AppProtectLoadModule {
+	nginxCfg := generateNginxCfgForMergeableIngresses(mergeableIngs, masterPems, masterJwtKeyFileName, minionJwtKeyFileNames, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.MainAppProtectLoadModule, cnf.IsResolverConfigured())
+	if cnf.staticCfgParams.MainAppProtectLoadModule {
 		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
 		if len(filesNotReady) > 0 {
 			return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
@@ -480,7 +480,7 @@ func (cnf *Configurator) updatePlusEndpointsForVirtualServer(virtualServerEx *Vi
 }
 
 func (cnf *Configurator) updatePlusEndpoints(ingEx *IngressEx) error {
-	ingCfg := parseAnnotations(ingEx, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.AppProtectLoadModule)
+	ingCfg := parseAnnotations(ingEx, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.MainAppProtectLoadModule)
 
 	cfg := nginx.ServerConfig{
 		MaxFails:    ingCfg.MaxFails,
@@ -672,11 +672,11 @@ func (cnf *Configurator) GetVirtualServerCounts() (vsCount int, vsrCount int) {
 //AddOrUpdateAppProtectPolicy writes policy data to a file
 func (cnf *Configurator) AddOrUpdateAppProtectPolicy(key string, data []byte) error {
 
-	AppolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
+	appolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
 
-	_, existErr := os.Stat(AppolicyFilePath)
+	_, existErr := os.Stat(appolicyFilePath)
 
-	err := ioutil.WriteFile(AppolicyFilePath, data, 0644)
+	err := ioutil.WriteFile(appolicyFilePath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("Error when writing Policy to file: %v", err)
 	}
@@ -689,8 +689,8 @@ func (cnf *Configurator) AddOrUpdateAppProtectPolicy(key string, data []byte) er
 
 // DeleteAppProtectPolicy deletes the policy data file
 func (cnf *Configurator) DeleteAppProtectPolicy(key string) error {
-	AppolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
-	return os.Remove(AppolicyFilePath)
+	appolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
+	return os.Remove(appolicyFilePath)
 }
 
 // AddOrUpdateAppProtectLogConf writes a log configuration to file

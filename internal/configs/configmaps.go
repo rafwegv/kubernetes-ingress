@@ -9,7 +9,7 @@ import (
 )
 
 // ParseConfigMap parses ConfigMap into ConfigParams.
-func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool) *ConfigParams {
+func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool, hasAppProtect bool) *ConfigParams {
 	cfgParams := NewDefaultConfigParams()
 
 	if serverTokens, exists, err := GetMapKeyAsBool(cfgm.Data, "server-tokens", cfgm); exists {
@@ -425,32 +425,35 @@ func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool) *ConfigParams {
 
 	if appProtectFailureModeAction, exists := cfgm.Data["app-protect-failure-mode-action"]; exists {
 		if appProtectFailureModeAction == "pass" || appProtectFailureModeAction == "drop" {
-		cfgParams.AppProtectFailureModeAction = appProtectFailureModeAction
+		cfgParams.MainAppProtectFailureModeAction = appProtectFailureModeAction
 		} else {
 			glog.Error("ConfigMap Key 'app-protect-failure-mode-action' must have value 'pass' or 'drop'. Ignoring.")
 		}
 	}
 	
-	if appProtectCookieSeed, exists := cfgm.Data["app-protect-cookie-seed"]; exists {
-		cfgParams.AppProtectCookieSeed = appProtectCookieSeed
-	}
-	
-	if appProtectCPUThresholds, exists := cfgm.Data["app-protect-cpu-thresholds"]; exists {
-		if VerifyThresholds(appProtectCPUThresholds) {
-		cfgParams.AppProtectCPUThresholds = appProtectCPUThresholds
-		} else {
-			glog.Error("ConfigMap Key 'app-protect-cpu-thresholds' must follow pattern: 'high=<number 0-100> low=<number 0-100>'. Ignoring.")
+	if hasAppProtect {
+
+		if appProtectCookieSeed, exists := cfgm.Data["app-protect-cookie-seed"]; exists {
+			cfgParams.MainAppProtectCookieSeed = appProtectCookieSeed
 		}
-	}
-	
-	if appProtectPhysicalMemoryThresholds, exists := cfgm.Data["app-protect-physical-memory-util-thresholds"]; exists {
-		cfgParams.AppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
-		if VerifyThresholds(appProtectPhysicalMemoryThresholds) {
-			cfgParams.AppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
+		
+		if appProtectCPUThresholds, exists := cfgm.Data["app-protect-cpu-thresholds"]; exists {
+			if VerifyThresholds(appProtectCPUThresholds) {
+			cfgParams.MainAppProtectCPUThresholds = appProtectCPUThresholds
 			} else {
-				glog.Error("ConfigMap Key 'app-protect-physical-memory-thresholds' must follow pattern: 'high=<number-0-100> low=<number-0-100>'. Ignoring.")
-			}	
-	}	
+				glog.Error("ConfigMap Key 'app-protect-cpu-thresholds' must follow pattern: 'high=<0 - 100> low=<0 - 100>'. Ignoring.")
+			}
+		}
+		
+		if appProtectPhysicalMemoryThresholds, exists := cfgm.Data["app-protect-physical-memory-util-thresholds"]; exists {
+			cfgParams.MainAppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
+			if VerifyThresholds(appProtectPhysicalMemoryThresholds) {
+				cfgParams.MainAppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
+				} else {
+					glog.Error("ConfigMap Key 'app-protect-physical-memory-thresholds' must follow pattern: 'high=<0 - 100> low=<0 - 100>'. Ignoring.")
+				}	
+		}	
+	}
 
 	return cfgParams
 }
@@ -497,11 +500,11 @@ func GenerateNginxMainConfig(staticCfgParams *StaticConfigParams, config *Config
 		OpenTracingEnabled:             config.MainOpenTracingEnabled,
 		OpenTracingTracer:              config.MainOpenTracingTracer,
 		OpenTracingTracerConfig:        config.MainOpenTracingTracerConfig,
-		AppProtectLoadModule:           staticCfgParams.AppProtectLoadModule,
-		AppProtectFailureModeAction:    config.AppProtectFailureModeAction,
-		AppProtectCookieSeed:           config.AppProtectCookieSeed,
-		AppProtectCPUThresholds:        config.AppProtectCPUThresholds,
-		AppProtectPhysicalMemoryThresholds: config.AppProtectPhysicalMemoryThresholds,
+		AppProtectLoadModule:           staticCfgParams.MainAppProtectLoadModule,
+		AppProtectFailureModeAction:    config.MainAppProtectFailureModeAction,
+		AppProtectCookieSeed:           config.MainAppProtectCookieSeed,
+		AppProtectCPUThresholds:        config.MainAppProtectCPUThresholds,
+		AppProtectPhysicalMemoryThresholds: config.MainAppProtectPhysicalMemoryThresholds,
 	}
 	return nginxCfg
 }

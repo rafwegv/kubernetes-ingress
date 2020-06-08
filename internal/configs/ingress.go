@@ -108,7 +108,7 @@ func generateNginxCfg(ingEx *IngressEx, pems map[string]string, isMinion bool, b
 			AppProtectEnable:      cfgParams.AppProtectEnable,
 			AppProtectPolicy:      cfgParams.AppProtectPolicy,
 			AppProtectLogConf:     cfgParams.AppProtectLogConf,
-			AppProtectLogEnable:   cfgParams.AppProtectEnable,
+			AppProtectLogEnable:   cfgParams.AppProtectLogEnable,
 		}
 
 		if pemFile, ok := pems[serverName]; ok {

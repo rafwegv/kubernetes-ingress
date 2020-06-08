@@ -84,10 +84,10 @@ type Server struct {
 
 	Ports    []int
 	SSLPorts []int
-	AppProtectEnable     bool
+	AppProtectEnable     string
 	AppProtectPolicy     string
 	AppProtectLogConf             string
-	AppProtectLogEnable           bool
+	AppProtectLogEnable           string
 }
 
 // JWTRedirectLocation describes a location for redirecting client requests to a login URL for JWT Authentication.

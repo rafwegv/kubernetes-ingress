@@ -195,9 +195,12 @@ func main() {
 	}
 
 	kubeClient, err := kubernetes.NewForConfig(config)
-	dynClient, err := dynamic.NewForConfig(config)
 	if err != nil {
 		glog.Fatalf("Failed to create client: %v.", err)
+	}
+	dynClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		glog.Fatalf("Failed to create dynamic client: %v.", err)
 	}
 
 	var confClient k8s_nginx.Interface
@@ -325,7 +328,7 @@ func main() {
 		if err != nil {
 			glog.Fatalf("Error when getting %v: %v", *nginxConfigMaps, err)
 		}
-		cfgParams = configs.ParseConfigMap(cfm, *nginxPlus)
+		cfgParams = configs.ParseConfigMap(cfm, *nginxPlus, *appProtect)
 		if cfgParams.MainServerSSLDHParamFileContent != nil {
 			fileName, err := nginxManager.CreateDHParam(*cfgParams.MainServerSSLDHParamFileContent)
 			if err != nil {
@@ -354,7 +357,7 @@ func main() {
 		NginxStatusAllowCIDRs:          allowedCIDRs,
 		NginxStatusPort:                *nginxStatusPort,
 		StubStatusOverUnixSocketForOSS: *enablePrometheusMetrics,
-		AppProtectLoadModule:           *appProtect,
+		MainAppProtectLoadModule:       *appProtect,
 	}
 
 	ngxConfig := configs.GenerateNginxMainConfig(staticCfgParams, cfgParams)
@@ -377,7 +380,6 @@ func main() {
 
 	nginxDone := make(chan error, 1)
 	nginxManager.Start(nginxDone)
-
 
 	var plusClient *client.NginxClient
 	if *nginxPlus && !useFakeNginxManager {
@@ -409,7 +411,6 @@ func main() {
 	lbcInput := k8s.NewLoadBalancerControllerInput{
 		KubeClient:                kubeClient,
 		ConfClient:                confClient,
-		DynClient:                 dynClient,
 		ResyncPeriod:              30 * time.Second,
 		Namespace:                 *watchNamespace,
 		NginxConfigurator:         cnf,
@@ -427,6 +428,10 @@ func main() {
 		ConfigMaps:                *nginxConfigMaps,
 		AreCustomResourcesEnabled: *enableCustomResources,
 		MetricsCollector:          controllerCollector,
+	}
+
+	if *appProtect {
+		lbcInput.DynClient = dynClient
 	}
 
 	lbc := k8s.NewLoadBalancerController(lbcInput)
@@ -576,7 +581,6 @@ func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManag
 
 	exitStatus := 0
 	
-
 	select {
 	case err := <-nginxDone:
 		if err != nil {
@@ -611,6 +615,10 @@ func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManag
 		nginxManager.AppProtectPluginQuit()
 		nginxManager.AppProtectAgentQuit()
 	}
+
+	<-nginxDone
+	<-pluginDone
+	<-agentDone
 
 	glog.Infof("Shutting down the controller")
 	lbc.Stop()

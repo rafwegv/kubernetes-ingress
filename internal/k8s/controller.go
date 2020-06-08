@@ -59,22 +59,22 @@ const (
 )
 
 var (
-	wafconfigGVR = schema.GroupVersionResource{
+	appProtectPolicyGVR = schema.GroupVersionResource{
 		Group:    "appprotect.f5.com",
 		Version:  "v1beta1",
 		Resource: "appolicies",
 	}
-	wafconfigGVK = schema.GroupVersionKind{
+	appProtectPolicyGVK = schema.GroupVersionKind{
 		Group:   "appprotect.f5.com",
 		Version: "v1beta1",
 		Kind:    "APPolicy",
 	}
-	waflogconfigGVR = schema.GroupVersionResource{
+	appProtectLogConfGVR = schema.GroupVersionResource{
 		Group:    "appprotect.f5.com",
 		Version:  "v1beta1",
 		Resource: "aplogconfs",
 	}
-	waflogconfigGVK = schema.GroupVersionKind{
+	appProtectLogConfGVK = schema.GroupVersionKind{
 		Group:   "appprotect.f5.com",
 		Version: "v1beta1",
 		Kind:    "APLogConf",
@@ -207,9 +207,11 @@ func NewLoadBalancerController(input NewLoadBalancerControllerInput) *LoadBalanc
 	lbc.addServiceHandler(createServiceHandlers(lbc))
 	lbc.addEndpointHandler(createEndpointHandlers(lbc))
 	lbc.addPodHandler()
-	lbc.dynInformerFactory = dynamicinformer.NewDynamicSharedInformerFactory(lbc.dynClient, input.ResyncPeriod)
-	lbc.AddappProtectPolicyHandler(createAppProtectConfigHandlerfuncs(lbc))
-	lbc.AddappProtectLogConfHandler(createAppProtectLogConfHandlerfuncs(lbc))
+	if lbc.appProtectEnabled {
+		lbc.dynInformerFactory = dynamicinformer.NewDynamicSharedInformerFactory(lbc.dynClient, 0)
+		lbc.addAppProtectPolicyHandler(createAppProtectPolicyHandlers(lbc))
+		lbc.addAppProtectLogConfHandler(createAppProtectLogConfHandlers(lbc))
+	}
 
 	if lbc.areCustomResourcesEnabled {
 		lbc.addVirtualServerHandler(createVirtualServerHandlers(lbc))
@@ -255,15 +257,15 @@ func (lbc *LoadBalancerController) AddSyncQueue(item interface{}) {
 }
 
 // AddappProtectPolicyHandler create dynamic informers for custom appprotect policy resource
-func (lbc *LoadBalancerController) AddappProtectPolicyHandler(handlers cache.ResourceEventHandlerFuncs) {
-	lbc.appProtectPolicyInformer = lbc.dynInformerFactory.ForResource(wafconfigGVR).Informer()
+func (lbc *LoadBalancerController) addAppProtectPolicyHandler(handlers cache.ResourceEventHandlerFuncs) {
+	lbc.appProtectPolicyInformer = lbc.dynInformerFactory.ForResource(appProtectPolicyGVR).Informer()
 	lbc.appProtectPolicyLister = lbc.appProtectPolicyInformer.GetStore()
 	lbc.appProtectPolicyInformer.AddEventHandler(handlers)
 }
 
 // AddappProtectLogConfHandler create dynamic informer for custom appprotect logging config resource
-func (lbc *LoadBalancerController) AddappProtectLogConfHandler(handlers cache.ResourceEventHandlerFuncs) {
-	lbc.appProtectLogConfInformer = lbc.dynInformerFactory.ForResource(waflogconfigGVR).Informer()
+func (lbc *LoadBalancerController) addAppProtectLogConfHandler(handlers cache.ResourceEventHandlerFuncs) {
+	lbc.appProtectLogConfInformer = lbc.dynInformerFactory.ForResource(appProtectLogConfGVR).Informer()
 	lbc.appProtectLogConfLister = lbc.appProtectLogConfInformer.GetStore()
 	lbc.appProtectLogConfInformer.AddEventHandler(handlers)
 }
@@ -503,7 +505,7 @@ func (lbc *LoadBalancerController) syncConfig(task task) {
 
 	if configExists {
 		cfgm := obj.(*api_v1.ConfigMap)
-		cfgParams = configs.ParseConfigMap(cfgm, lbc.isNginxPlus)
+		cfgParams = configs.ParseConfigMap(cfgm, lbc.isNginxPlus, lbc.appProtectEnabled)
 
 		lbc.statusUpdater.SaveStatusFromExternalStatus(cfgm.Data["external-status-address"])
 	}
@@ -2183,14 +2185,14 @@ func formatWarningMessages(w []string) string {
 func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
 	key := task.Key
 	glog.V(3).Infof("Syncing AppProtectPolicy %v", key)
-	obj, polexists, err := lbc.appProtectPolicyLister.GetByKey(key)
+	obj, polExists, err := lbc.appProtectPolicyLister.GetByKey(key)
 	if err != nil {
 		glog.V(3).Infof("Error Syncing policy %v", key)
 		return
 	}
-	if !polexists {
-		inuse, name := lbc.isAppProtectPolicyInUse(key)
-		if inuse {
+	if !polExists {
+		inUse, name := lbc.isAppProtectPolicyInUse(key)
+		if inUse {
 			glog.V(1).Infof("WARNING! Deleted AppProtectPolicy %v is in use in ingress %v", key, name)
 		}
 		err = lbc.configurator.DeleteAppProtectPolicy(key)
@@ -2208,11 +2210,11 @@ func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
 			glog.V(3).Infof("'spec' field not found in AppProtectPolicy %v", key)
 			return
 		}
-		PolicyData, err := json.Marshal(spec)
+		policyData, err := json.Marshal(spec)
 		if err != nil {
 			glog.V(3).Infof("Error marshaling AppProtectPolicy %v: %v ", key, err)
 		}
-		err = lbc.configurator.AddOrUpdateAppProtectPolicy(key, PolicyData)
+		err = lbc.configurator.AddOrUpdateAppProtectPolicy(key, policyData)
 		if err != nil {
 			glog.V(3).Infof("Error adding or updating AppProtectPolicy %v : %v", key, err)
 		}
@@ -2223,15 +2225,15 @@ func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
 func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
 	key := task.Key
 	glog.V(3).Infof("Syncing AppProtectLogConf %v", key)
-	obj, confexists, err := lbc.appProtectLogConfLister.GetByKey(key)
+	obj, confExists, err := lbc.appProtectLogConfLister.GetByKey(key)
 	if err != nil {
 		glog.V(3).Infof("Error Syncing AppProtectLogConf %v", key)
 		return
 	}
-	if !confexists {
+	if !confExists {
 		glog.V(3).Infof("Deleting AppProtectLogConf %v", key)
-		inuse, name := lbc.isAppProtectLogConfInUse(key)
-		if inuse {
+		inUse, name := lbc.isAppProtectLogConfInUse(key)
+		if inUse {
 			glog.V(1).Infof("WARNING! Deleted AppProtectLogConf %v is in use in ingress %v", key, name)
 		}
 		err = lbc.configurator.DeleteAppProtectLogConf(key)

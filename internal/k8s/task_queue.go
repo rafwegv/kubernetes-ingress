@@ -149,9 +149,9 @@ func newTask(key string, obj interface{}) (task, error) {
 	case *conf_v1.VirtualServerRoute:
 		k = virtualServerRoute
 	case *unstructured.Unstructured:
-		if objectKind := obj.(*unstructured.Unstructured).GetKind(); objectKind == wafconfigGVK.Kind {
+		if objectKind := obj.(*unstructured.Unstructured).GetKind(); objectKind == appProtectPolicyGVK.Kind {
 			k = appProtectPolicy
-		} else if objectKind == waflogconfigGVK.Kind {
+		} else if objectKind == appProtectLogConfGVK.Kind {
             k = appProtectLogConf
 		} else {
 			return task{}, fmt.Errorf("Unknow unstructured kind: %v", objectKind)

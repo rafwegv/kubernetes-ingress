@@ -317,7 +317,11 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 			if err != nil {
 				glog.Error(err)
 			} else {
-				cfgParams.AppProtectEnable = appProtectEnable
+				if appProtectEnable {
+					cfgParams.AppProtectEnable = "on"
+				} else {
+					cfgParams.AppProtectEnable = "off"
+				}
 			}
 		}
 		if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app-protect-policy"]; exists {
@@ -328,7 +332,11 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 			if err != nil {
 				glog.Error(err)
 			} else {
-				cfgParams.AppProtectEnable = appProtectLogEnable
+				if appProtectLogEnable {
+					cfgParams.AppProtectLogEnable = "on"
+				} else {
+					cfgParams.AppProtectLogEnable = "off"
+				}
 			}
 		}
 
