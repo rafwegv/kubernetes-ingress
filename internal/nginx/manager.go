@@ -43,6 +43,8 @@ type Manager interface {
 	DeleteConfig(name string)
 	CreateSecret(name string, content []byte, mode os.FileMode) string
 	DeleteSecret(name string)
+	CreateApResourceFile(name string, content []byte) error
+	DeleteApResourceFile(name string)
 	GetFilenameForSecret(name string) string
 	CreateDHParam(content string) (string, error)
 	CreateOpenTracingTracerConfig(content string) error
@@ -192,6 +194,18 @@ func (lm *LocalManager) CreateDHParam(content string) (string, error) {
 	}
 
 	return lm.dhparamFilename, nil
+}
+
+//CreateApResourceFile writes contents of An App Protect resource to a file
+func (lm *LocalManager) CreateApResourceFile(name string, content []byte) error {
+	return createFileAndWrite(name, content)
+}
+
+//DeleteApResourceFile removes an App Protect policy file from storage
+func (lm *LocalManager) DeleteApResourceFile(name string) {
+	if err := os.Remove(name); err != nil {
+		glog.Warningf("Failed to delete App Protect Resource from %v: %v", name, err)
+	}
 }
 
 // Start starts NGINX.

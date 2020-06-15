@@ -48,11 +48,11 @@ server {
 
 	{{- if $server.AppProtectEnable}}
 	app_protect_enable {{$server.AppProtectEnable}};
-	{{if $server.AppProtectPolicy}}app_protect_policy_file "/etc/nginx/waf/nac-policies/{{$server.AppProtectPolicy}}";{{end}}
+	{{if $server.AppProtectPolicy}}app_protect_policy_file {{$server.AppProtectPolicy}};{{end}}
 	{{- end}}
 	{{- if $server.AppProtectLogEnable}}
 	app_protect_security_log_enable {{$server.AppProtectLogEnable}};
-	{{if $server.AppProtectLogConf}}app_protect_security_log /etc/nginx/waf/nac-logconfs/{{$server.AppProtectLogConf}};{{end}}
+	{{if $server.AppProtectLogConf}}app_protect_security_log {{$server.AppProtectLogConf}};{{end}}
 	{{- end}}
 	
 	{{if not $server.GRPCOnly}}

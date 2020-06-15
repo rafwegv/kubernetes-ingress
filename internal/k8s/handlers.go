@@ -439,12 +439,12 @@ func createAppProtectLogConfHandlers(lbc *LoadBalancerController) cache.Resource
 			oldConf := oldObj.(*unstructured.Unstructured)
 			newConf := obj.(*unstructured.Unstructured)
 			updated, err := compareSpecs(oldConf, newConf)
+			if err != nil {
+				glog.V(3).Infof("Error when comparing LogConfs %v", err)
+			}
 			if updated {
 				glog.V(3).Infof("ApLogConf %v changed, syncing", oldConf.GetName())
 				lbc.AddSyncQueue(newConf)
-			}
-			if err != nil {
-				glog.V(3).Infof("Error when comparing LogConfs %v", err)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {

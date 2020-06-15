@@ -11,6 +11,16 @@ import (
 // JWTKeyAnnotation is the annotation where the Secret with a JWK is specified.
 const JWTKeyAnnotation = "nginx.com/jwt-key"
 
+//ApPolicyAnnotation is where the NGINX App Protect policy is specified
+const ApPolicyAnnotation = "appprotect.f5.com/app-protect-policy"
+
+//ApLogConfAnnotation is where the NGINX AppProtect Log Configuration is specified
+const ApLogConfAnnotation = "appprotect.f5.com/app-protect-security-log"
+
+//ApLogConfAnnotation is where the NGINX AppProtect Log Configuration is specified
+const ApLogConfDstAnnotation = "appprotect.f5.com/app-protect-security-log-destination"
+
+
 var masterBlacklist = map[string]bool{
 	"nginx.org/rewrites":                      true,
 	"nginx.org/ssl-services":                  true,
@@ -324,9 +334,6 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 				}
 			}
 		}
-		if appProtectPolicy, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app-protect-policy"]; exists {
-			cfgParams.AppProtectPolicy = strings.Replace(appProtectPolicy, "/", "_", 1)
-		}
 
 		if appProtectLogEnable, exists, err := GetMapKeyAsBool(ingEx.Ingress.Annotations, "appprotect.f5.com/app-protect-security-log-enable", ingEx.Ingress); exists {
 			if err != nil {
@@ -338,10 +345,6 @@ func parseAnnotations(ingEx *IngressEx, baseCfgParams *ConfigParams, isPlus bool
 					cfgParams.AppProtectLogEnable = "off"
 				}
 			}
-		}
-
-		if appProtectLogConf, exists := ingEx.Ingress.Annotations["appprotect.f5.com/app-protect-security-log"]; exists {
-			cfgParams.AppProtectLogConf = strings.Replace(appProtectLogConf, "/", "_", 1)
 		}
 
 	}	

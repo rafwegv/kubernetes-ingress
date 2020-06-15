@@ -36,7 +36,16 @@ func (*FakeManager) CreateConfig(name string, content []byte) {
 	glog.V(3).Infof("Writing config %v", name)
 	glog.V(3).Info(string(content))
 }
-
+//CreateApResourceFile provides a fake implementation of CreateApResourceFile
+func (*FakeManager) CreateApResourceFile(name string, content []byte) error {
+	glog.V(3).Infof("Writing Ap Resource File %v", name)
+	glog.V(3).Info(string(content))
+	return nil
+}
+//DeleteApResourceFile provides a fake implementation of DeleteApResourceFile
+func (*FakeManager) DeleteApResourceFile(name string) {
+	glog.V(3).Infof("Deleting Ap Resource File %v", name)
+}
 // DeleteConfig provides a fake implementation of DeleteConfig.
 func (*FakeManager) DeleteConfig(name string) {
 	glog.V(3).Infof("Deleting config %v", name)

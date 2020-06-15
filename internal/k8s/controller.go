@@ -18,7 +18,6 @@ package k8s
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -905,11 +904,6 @@ func (lbc *LoadBalancerController) syncIng(task task) {
 
 		err = lbc.configurator.AddOrUpdateIngress(ingEx)
 		if err != nil {
-			if strings.Contains(err.Error(), "AppProtect") {
-				lbc.syncQueue.RequeueAfter(task, err, 5*time.Second)
-				lbc.recorder.Eventf(ing, api_v1.EventTypeWarning, "Rejected", "%v was rejected: %v", key, err)
-				return
-			}
 			lbc.recorder.Eventf(ing, api_v1.EventTypeWarning, "AddedOrUpdatedWithError", "Configuration for %v was added or updated, but not applied: %v", key, err)
 		} else {
 			lbc.recorder.Eventf(ing, api_v1.EventTypeNormal, "AddedOrUpdated", "Configuration for %v was added or updated", key)
@@ -1542,6 +1536,25 @@ func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*conf
 				Secret: secret,
 			}
 		}
+		if lbc.appProtectEnabled {
+			var policy *unstructured.Unstructured
+			var logConf *unstructured.Unstructured
+			var logDst string
+			if apPolicyAntn, exists := ingEx.Ingress.Annotations[configs.ApPolicyAnnotation]; exists {
+				policy = lbc.getApPolicy(ing, apPolicyAntn)
+				if policy != nil {
+					ingEx.ApPolicy = policy
+				}
+			}
+
+			if apLogConfAntn, exists := ingEx.Ingress.Annotations[configs.ApLogConfAnnotation]; exists {
+				logConf, logDst = lbc.getApLogConfAndDst(ing, apLogConfAntn)
+				if logConf != nil {
+					ingEx.ApLogConf = logConf
+					ingEx.ApLogDst = logDst
+				}
+			}
+		}
 	}
 
 	ingEx.Endpoints = make(map[string][]string)
@@ -1621,6 +1634,51 @@ func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*conf
 	}
 
 	return ingEx, nil
+}
+
+func (lbc *LoadBalancerController) getApLogConfAndDst(ing *extensions.Ingress, apLogConfAnnotation string) (logConf *unstructured.Unstructured, logDst string) {
+	//DEBUG
+	//fmt.Printf("getApLogConfAndDst %s", apLogConfAnnotation)
+	if _, exists := ing.Annotations[configs.ApLogConfDstAnnotation]; ! exists {
+		glog.Warningf("Error: app-protect-security-log requires app-protect-security-log-destination in %v", ing.Name)
+		return nil, ""
+	}
+	lcNamespace, lcName, logDst, err := ValidateApLogConfAnnotations(apLogConfAnnotation, ing.Annotations[configs.ApLogConfDstAnnotation])
+	if err != nil {
+		glog.Warningf("Error Validating App Protect Log Config for Ingress %v: %v", ing.Name, err)
+		return nil, ""
+	}
+	logConf, err = lbc.dynClient.Resource(appProtectLogConfGVR).Namespace(lcNamespace).Get(lcName, meta_v1.GetOptions{})
+	if err != nil {
+		glog.Warningf("Error retrieving App Protect Log Config for Ingress %v: %v", ing.Name, err)
+		return nil, ""
+	}
+	err = ValidateApLogConf(logConf)
+	if err != nil {
+		glog.Warningf("Error validating App Protect Log Config  for Ingress %v: %v", ing.Name, err)
+		return nil, ""
+	}
+
+	return logConf, logDst
+}
+
+func (lbc *LoadBalancerController) getApPolicy(ing *extensions.Ingress, apPolicyAnnotation string) (apPolicy *unstructured.Unstructured) {
+	polNs, polN, err := ParseNamespaceName(apPolicyAnnotation)
+	if err != nil {
+		glog.Warningf("Error parsing App Protect Policy name for Ingress %v: %v ", ing.Name, err)
+		return nil
+	}
+	apPolicy, err = lbc.dynClient.Resource(appProtectPolicyGVR).Namespace(polNs).Get(polN, meta_v1.GetOptions{})
+	if err != nil {
+		glog.Warningf("Error retirieving App Protect Policy name for Ingress %v: %v ", ing.Name, err)
+		return nil
+	}
+	err = ValidateApPolicy(apPolicy)
+	if err != nil {
+		glog.Warningf("Error validating App Protect Policy %v for Ingress %v: %v", apPolicy.GetName(), ing.Name, err)
+		return nil
+	}
+	return apPolicy
 }
 
 type virtualServerRouteError struct {
@@ -2188,37 +2246,82 @@ func (lbc *LoadBalancerController) syncAppProtectPolicy(task task) {
 	obj, polExists, err := lbc.appProtectPolicyLister.GetByKey(key)
 	if err != nil {
 		glog.V(3).Infof("Error Syncing policy %v", key)
+		lbc.syncQueue.Requeue(task, err)
 		return
 	}
+	
+	namespace, name, err := ParseNamespaceName(key)
+	if err != nil {
+		glog.Warningf("Policy key %v is invalid: %v", key, err)
+		return
+	}
+
+	ings := lbc.findIngressesForApPolicy(namespace, name)
+
+	glog.V(2).Infof("Found %v Ingresses with App Protect Policy %v", len(ings), key)
+
 	if !polExists {
-		inUse, name := lbc.isAppProtectPolicyInUse(key)
-		if inUse {
-			glog.V(1).Infof("WARNING! Deleted AppProtectPolicy %v is in use in ingress %v", key, name)
-		}
-		err = lbc.configurator.DeleteAppProtectPolicy(key)
+		err = lbc.handleApPolicyDeletion(key, ings)
 		if err != nil {
 			glog.V(3).Infof("Error deleting AppProtectPolicy %v", key)
 		}
-
-	} else {
-		spec, found, err := unstructured.NestedMap(obj.(*unstructured.Unstructured).Object, "spec")
-		if err != nil {
-			glog.V(3).Infof("Error getting spec from AppProtectPolicy %v: %v", key, err)
-			return
-		}
-		if !found {
-			glog.V(3).Infof("'spec' field not found in AppProtectPolicy %v", key)
-			return
-		}
-		policyData, err := json.Marshal(spec)
-		if err != nil {
-			glog.V(3).Infof("Error marshaling AppProtectPolicy %v: %v ", key, err)
-		}
-		err = lbc.configurator.AddOrUpdateAppProtectPolicy(key, policyData)
-		if err != nil {
-			glog.V(3).Infof("Error adding or updating AppProtectPolicy %v : %v", key, err)
-		}
+		return
 	}
+
+	policy := obj.(*unstructured.Unstructured)
+	
+	err = ValidateApPolicy(policy)
+	if err != nil {
+		glog.V(3).Infof("Error validating App Protect Policy: %v", err)
+		lbc.recorder.Eventf(policy, api_v1.EventTypeWarning, "Rejected", "%v was rejected: %v", key, err)
+		return
+	}
+	err = lbc.handleApPolicyUpdate(policy, ings)
+	if err != nil {
+		glog.V(3).Infof("Error adding or updating AppProtectPolicy %v : %v", key, err)
+	}
+
+}
+
+func (lbc *LoadBalancerController) handleApPolicyUpdate(pol *unstructured.Unstructured, ings []extensions.Ingress) error {
+	regular, mergeable := lbc.createIngresses(ings)
+	polNsName := pol.GetNamespace() + "/" + pol.GetName()
+
+	eventType := api_v1.EventTypeNormal
+	title := "Updated"
+	message := fmt.Sprintf("Configuration was updated due to updated App Protect Policy %v", polNsName)
+
+	err := lbc.configurator.AddOrUpdateApPolicy(pol, regular, mergeable)
+	if err != nil {
+		eventType = api_v1.EventTypeWarning
+		title = "UpdatedWithError"
+		message = fmt.Sprintf("Configuration was updated due to updated App Protect Policy %v, but not applied: %v", polNsName, err)
+		lbc.emitEventForIngresses(eventType, title, message, ings)
+		return err
+	}
+
+	lbc.emitEventForIngresses(eventType, title, message, ings)
+	return nil
+}
+
+func (lbc *LoadBalancerController) handleApPolicyDeletion(key string, ings []extensions.Ingress) error {
+	regular, mergeable := lbc.createIngresses(ings)	
+	
+	eventType := api_v1.EventTypeNormal
+	title := "Updated"
+	message := fmt.Sprintf("Configuration was updated due to deleted App Protect Policy %v", key)
+
+	err := lbc.configurator.DeleteApPolicy(key, regular, mergeable) 
+	if err != nil {
+		eventType = api_v1.EventTypeWarning
+		title = "UpdatedWithError"
+		message = fmt.Sprintf("Configuration was updated due to deleted App Protect Policy %v, but not applied: %v", key, err)
+		lbc.emitEventForIngresses(eventType, title, message, ings)
+		return err
+	}
+	
+	lbc.emitEventForIngresses(eventType, title, message, ings)
+	return nil
 
 }
 
@@ -2228,64 +2331,121 @@ func (lbc *LoadBalancerController) syncAppProtectLogConf(task task) {
 	obj, confExists, err := lbc.appProtectLogConfLister.GetByKey(key)
 	if err != nil {
 		glog.V(3).Infof("Error Syncing AppProtectLogConf %v", key)
+		lbc.syncQueue.Requeue(task, err)
 		return
 	}
+
+	namespace, name, err := ParseNamespaceName(key)
+	if err != nil {
+		glog.Warningf("Log Configurtion key %v is invalid: %v", key, err)
+		return
+	}
+
+	ings := lbc.findIngressesForApLogConf(namespace, name)
+
+	glog.V(2).Infof("Found %v Ingresses with App Protect Policy %v", len(ings), key)
+
 	if !confExists {
 		glog.V(3).Infof("Deleting AppProtectLogConf %v", key)
-		inUse, name := lbc.isAppProtectLogConfInUse(key)
-		if inUse {
-			glog.V(1).Infof("WARNING! Deleted AppProtectLogConf %v is in use in ingress %v", key, name)
-		}
-		err = lbc.configurator.DeleteAppProtectLogConf(key)
+		err = lbc.handleApLogConfDeletion(key, ings)
 		if err != nil {
-			glog.V(3).Infof("Error deleting AppProtectPolicy %v", key)
+			glog.V(3).Infof("Error deleting App Protect LogConfig %v", key)
 		}
-	} else {
-		spec, found, err := unstructured.NestedMap(obj.(*unstructured.Unstructured).Object, "spec")
-		if err != nil {
-			glog.V(3).Infof("Error getting spec from AppProtectLogConf %v: %v", key, err)
-			return
-		}
-		if !found {
-			glog.V(3).Infof("'spec' field not found in AppProtectLogConf %v", key)
-			return
-		}
-		PolicyData, err := json.Marshal(spec)
-		if err != nil {
-			glog.V(3).Infof("Error marshaling AppProtectLogConf %v: %v ", key, err)
-		}
-		err = lbc.configurator.AddOrUpdateAppProtectLogConf(key, PolicyData)
-		if err != nil {
-			glog.V(3).Infof("Error adding or updating AppProtectLogConf %v : %v", key, err)
-		}
+		return
 	}
+	
+	logConf := obj.(*unstructured.Unstructured)
 
+	err = ValidateApLogConf(obj.(*unstructured.Unstructured))
+	if err != nil {
+		glog.V(3).Infof("Error validating App Protect Log configuration: %v", err)
+		return
+	}
+	err = lbc.handleApLogConfUpdate(logConf, ings)
+	if err != nil {
+		glog.V(3).Infof("Error adding or updating AppProtectLogConf %v : %v", key, err)
+	}
 }
 
-func (lbc *LoadBalancerController) isAppProtectPolicyInUse(key string) (bool, string) {
-	ings, err := lbc.ingressLister.List()
+func (lbc *LoadBalancerController) handleApLogConfUpdate(logConf *unstructured.Unstructured, ings []extensions.Ingress) error {
+	logConfNsName := logConf.GetNamespace() + "/" + logConf.GetName()
+
+	eventType := api_v1.EventTypeNormal
+	title := "Updated"
+	message := fmt.Sprintf("Configuration was updated due to updated App Protect Log Configuration %v", logConfNsName)
+
+	regular, mergeable := lbc.createIngresses(ings)
+	err := lbc.configurator.AddOrUpdateApLogConf(logConf, regular, mergeable) 
 	if err != nil {
-		return false, "empty"
+		eventType = api_v1.EventTypeWarning
+		title = "UpdatedWithError"
+		message = fmt.Sprintf("Configuration was updated due to updated App Protect Log Configuration %v, but not applied: %v", logConfNsName, err)
+		lbc.emitEventForIngresses(eventType, title, message, ings)
+		return err
 	}
-	for i := range ings.Items {
-		anns := ings.Items[i].GetAnnotations()
-		if anns["appprotect.f5.com/app_protect_policy"] == key {
-			return true, ings.Items[i].GetName()
-		}
-	}
-	return false, "empty"
+
+	lbc.emitEventForIngresses(eventType, title, message, ings)
+	return nil
 }
 
-func (lbc *LoadBalancerController) isAppProtectLogConfInUse(key string) (bool, string) {
-	ings, err := lbc.ingressLister.List()
+func (lbc *LoadBalancerController) handleApLogConfDeletion(key string, ings []extensions.Ingress) error {
+	
+	eventType := api_v1.EventTypeNormal
+	title := "Updated"
+	message := fmt.Sprintf("Configuration was updated due to deleted App Protect Log Configuration %v", key)
+	
+	regular, mergeable := lbc.createIngresses(ings)
+	err := lbc.configurator.DeleteApLogConf(key, regular, mergeable)
 	if err != nil {
-		return false, "empty"
+		eventType = api_v1.EventTypeWarning
+		title = "UpdatedWithError"
+		message = fmt.Sprintf("Configuration was updated due to deleted App Protect Log Configuration %v, but not applied: %v", key, err)
+		lbc.emitEventForIngresses(eventType, title, message, ings)
+		return err		
 	}
-	for i := range ings.Items {
-		anns := ings.Items[i].GetAnnotations()
-		if anns["appprotect.f5.com/app_protect_security_log"] == key {
-			return true, ings.Items[i].GetName()
+	
+	lbc.emitEventForIngresses(eventType, title, message, ings)
+	return nil
+}
+
+func (lbc *LoadBalancerController) findIngressesForApPolicy(policyNamespace string, policyName string) (apIngs []extensions.Ingress) {
+	ings, mIngs := lbc.GetManagedIngresses()
+	for i := range ings {
+		anns := ings[i].GetAnnotations()
+		if pol, exists := anns[configs.ApPolicyAnnotation]; exists {
+			if pol == policyNamespace+"/"+policyName {
+				apIngs = append(apIngs, ings[i])
+			}
 		}
 	}
-	return false, "empty"
+	for _, mIng := range mIngs {
+		anns := mIng.Master.Ingress.GetAnnotations()
+		if pol, exists := anns[configs.ApLogConfAnnotation]; exists {
+			if pol == policyNamespace+"/"+policyName {
+				apIngs = append(apIngs, *mIng.Master.Ingress)
+			}
+		}
+	}
+	return apIngs
+}
+
+func (lbc *LoadBalancerController) findIngressesForApLogConf(logConfNamespace string, logConfName string) (apLCIngs []extensions.Ingress) {
+	ings, mIngs := lbc.GetManagedIngresses()
+	for i := range ings {
+		anns := ings[i].GetAnnotations()
+		if pol, exists := anns[configs.ApLogConfAnnotation]; exists {
+			if pol == logConfNamespace+"/"+logConfName {
+				apLCIngs = append(apLCIngs, ings[i])
+			}
+		}
+	}
+	for _, mIng := range mIngs {
+		anns := mIng.Master.Ingress.GetAnnotations()
+		if pol, exists := anns[configs.ApLogConfAnnotation]; exists {
+			if pol == logConfNamespace+"/"+logConfName {
+				apLCIngs = append(apLCIngs, *mIng.Master.Ingress)
+			}
+		}
+	}
+	return apLCIngs
 }

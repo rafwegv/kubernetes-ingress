@@ -2,9 +2,8 @@ package configs
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"strings"
 
 	"github.com/nginxinc/kubernetes-ingress/internal/configs/version2"
@@ -16,6 +15,7 @@ import (
 	api_v1 "k8s.io/api/core/v1"
 	extensions "k8s.io/api/extensions/v1beta1"
 	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 const pemFileNameForMissingTLSSecret = "/etc/nginx/secrets/default"
@@ -83,18 +83,13 @@ func (cnf *Configurator) AddOrUpdateIngress(ingEx *IngressEx) error {
 }
 
 func (cnf *Configurator) addOrUpdateIngress(ingEx *IngressEx) error {
+	apResources := cnf.updateApResources(ingEx)
 	pems := cnf.updateTLSSecrets(ingEx)
 	jwtKeyFileName := cnf.updateJWKSecret(ingEx)
 
 	isMinion := false
-	nginxCfg := generateNginxCfg(ingEx, pems, isMinion, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.MainAppProtectLoadModule, cnf.IsResolverConfigured(), jwtKeyFileName)
-	if cnf.staticCfgParams.MainAppProtectLoadModule {
-		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
-		if len(filesNotReady) > 0 {
-			return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
-		}
-	}	
-	
+	nginxCfg := generateNginxCfg(ingEx, pems, apResources, isMinion, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.MainAppProtectLoadModule, cnf.IsResolverConfigured(), jwtKeyFileName)
+
 	name := objectMetaToFileName(&ingEx.Ingress.ObjectMeta)
 	content, err := cnf.templateExecutor.ExecuteIngressConfigTemplate(&nginxCfg)
 	if err != nil {
@@ -121,6 +116,7 @@ func (cnf *Configurator) AddOrUpdateMergeableIngress(mergeableIngs *MergeableIng
 }
 
 func (cnf *Configurator) addOrUpdateMergeableIngress(mergeableIngs *MergeableIngresses) error {
+	masterApResources := cnf.updateApResources(mergeableIngs.Master)
 	masterPems := cnf.updateTLSSecrets(mergeableIngs.Master)
 	masterJwtKeyFileName := cnf.updateJWKSecret(mergeableIngs.Master)
 	minionJwtKeyFileNames := make(map[string]string)
@@ -129,13 +125,7 @@ func (cnf *Configurator) addOrUpdateMergeableIngress(mergeableIngs *MergeableIng
 		minionJwtKeyFileNames[minionName] = cnf.updateJWKSecret(minion)
 	}
 
-	nginxCfg := generateNginxCfgForMergeableIngresses(mergeableIngs, masterPems, masterJwtKeyFileName, minionJwtKeyFileNames, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.MainAppProtectLoadModule, cnf.IsResolverConfigured())
-	if cnf.staticCfgParams.MainAppProtectLoadModule {
-		filesNotReady := aPResourcesReferencedButNotReady(nginxCfg.Servers)
-		if len(filesNotReady) > 0 {
-			return fmt.Errorf("AppProtect files referenced but not ready: %s", strings.Join(filesNotReady[:], ","))
-		}
-	}	
+	nginxCfg := generateNginxCfgForMergeableIngresses(mergeableIngs, masterPems, masterApResources, masterJwtKeyFileName, minionJwtKeyFileNames, cnf.cfgParams, cnf.isPlus, cnf.staticCfgParams.MainAppProtectLoadModule, cnf.IsResolverConfigured())
 	name := objectMetaToFileName(&mergeableIngs.Master.Ingress.ObjectMeta)
 	content, err := cnf.templateExecutor.ExecuteIngressConfigTemplate(&nginxCfg)
 	if err != nil {
@@ -669,49 +659,136 @@ func (cnf *Configurator) GetVirtualServerCounts() (vsCount int, vsrCount int) {
 	return vsCount, vsrCount
 }
 
-//AddOrUpdateAppProtectPolicy writes policy data to a file
-func (cnf *Configurator) AddOrUpdateAppProtectPolicy(key string, data []byte) error {
-
-	appolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
-
-	_, existErr := os.Stat(appolicyFilePath)
-
-	err := ioutil.WriteFile(appolicyFilePath, data, 0644)
-	if err != nil {
-		return fmt.Errorf("Error when writing Policy to file: %v", err)
+func (cnf *Configurator) updateApResources(ingEx *IngressEx) map[string]string {
+	apRes := make(map[string]string)
+	if ingEx.ApPolicy != nil {
+		policyFileName := appProtectPolicyFolder + ingEx.ApPolicy.GetNamespace() + "_" + ingEx.ApPolicy.GetName()
+		policyContent := generateApResourceFileContent(ingEx.ApPolicy)
+		err := cnf.nginxManager.CreateApResourceFile(policyFileName, policyContent)
+		if err != nil {
+			glog.Warningf("Error creating file %v: %v", policyFileName, err)
+		} else {
+			apRes[apPolicyKey] = policyFileName
+		}
 	}
 
-	if !os.IsNotExist(existErr) {
-		return cnf.nginxManager.Reload()
+	if ingEx.ApLogConf != nil {
+		logConfFileName := appProtectLogConfFolder + ingEx.ApLogConf.GetNamespace() + "_" + ingEx.ApLogConf.GetName()
+		logConfContent := generateApResourceFileContent(ingEx.ApLogConf)
+		err := cnf.nginxManager.CreateApResourceFile(logConfFileName, logConfContent)
+		if err != nil {
+			glog.Warningf("Error creating file %v: %v", logConfFileName, err)
+		} else {
+			apRes[apLogConfKey] = logConfFileName + " " + ingEx.ApLogDst
+		}
 	}
+
+	return apRes
+}
+
+func generateApResourceFileContent(apResource *unstructured.Unstructured) []byte {
+	// Safe to ignore errors since validation already checked those
+	spec, _, _ := unstructured.NestedMap(apResource.Object, "spec")
+	data, _ := json.Marshal(spec)
+	return data
+}
+
+//AddOrUpdateApPolicy updates Ingresses that use AP Policy
+func (cnf *Configurator) AddOrUpdateApPolicy(policy *unstructured.Unstructured, ingExes []IngressEx, mergeableIngresses []MergeableIngresses) error {
+	for i := range ingExes {
+		err := cnf.addOrUpdateIngress(&ingExes[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating ingress %v/%v: %v", ingExes[i].Ingress.Namespace, ingExes[i].Ingress.Name, err)
+		}
+	}
+
+	for i := range mergeableIngresses {
+		err := cnf.addOrUpdateMergeableIngress(&mergeableIngresses[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating mergeableIngress %v/%v: %v", mergeableIngresses[i].Master.Ingress.Namespace, mergeableIngresses[i].Master.Ingress.Name, err)
+		}
+	}
+
+	if err := cnf.nginxManager.Reload(); err != nil {
+		return fmt.Errorf("Error when reloading NGINX when updating App Protect Policy: %v", err)
+	}
+
 	return nil
 }
 
-// DeleteAppProtectPolicy deletes the policy data file
-func (cnf *Configurator) DeleteAppProtectPolicy(key string) error {
-	appolicyFilePath := appProtectPolicyFolder + strings.Replace(key, "/", "_", 1)
-	return os.Remove(appolicyFilePath)
-}
+//DeleteApPolicy updates Ingresses that use AP Policy after that policy is deleted
+func (cnf *Configurator) DeleteApPolicy(polNamespaceame string, ingExes []IngressEx, mergeableIngresses []MergeableIngresses) error {
+	fName := strings.Replace(polNamespaceame, "/", "_", 1)
+	polFileName := appProtectPolicyFolder + fName
+	cnf.nginxManager.DeleteApResourceFile(polFileName)
 
-// AddOrUpdateAppProtectLogConf writes a log configuration to file
-func (cnf *Configurator) AddOrUpdateAppProtectLogConf(key string, data []byte) error {
-
-	logConfFilePath := appProtectLogConfFolder + strings.Replace(key, "/", "_", 1)
-
-	_, existErr := os.Stat(logConfFilePath)
-
-	err := ioutil.WriteFile(logConfFilePath, data, 0644)
-	if err != nil {
-		return fmt.Errorf("Error when writing LogConfig to file: %v", err)
+	for i := range ingExes {
+		err := cnf.addOrUpdateIngress(&ingExes[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating ingress %v/%v: %v", ingExes[i].Ingress.Namespace, ingExes[i].Ingress.Name, err)
+		}
 	}
-	if !os.IsNotExist(existErr) {
-		return cnf.nginxManager.Reload()
+
+	for i := range mergeableIngresses {
+		err := cnf.addOrUpdateMergeableIngress(&mergeableIngresses[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating mergeableIngress %v/%v: %v", mergeableIngresses[i].Master.Ingress.Namespace, mergeableIngresses[i].Master.Ingress.Name, err)
+		}
 	}
+
+	if err := cnf.nginxManager.Reload(); err != nil {
+		return fmt.Errorf("Error when reloading NGINX when removing App Protect Policy: %v", err)
+	}
+
 	return nil
 }
 
-// DeleteAppProtectLogConf deletes the policy data file
-func (cnf *Configurator) DeleteAppProtectLogConf(key string) error {
-	logConfFilePath := appProtectLogConfFolder + strings.Replace(key, "/", "_", 1)
-	return os.Remove(logConfFilePath)
+//AddOrUpdateApLogConf updates Ingresses that use AP Log Configuration
+func (cnf *Configurator) AddOrUpdateApLogConf(logConf *unstructured.Unstructured, ingExes []IngressEx, mergeableIngresses []MergeableIngresses) error {
+	for i := range ingExes {
+		err := cnf.addOrUpdateIngress(&ingExes[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating ingress %v/%v: %v", ingExes[i].Ingress.Namespace, ingExes[i].Ingress.Name, err)
+		}
+	}
+
+	for i := range mergeableIngresses {
+		err := cnf.addOrUpdateMergeableIngress(&mergeableIngresses[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating mergeableIngress %v/%v: %v", mergeableIngresses[i].Master.Ingress.Namespace, mergeableIngresses[i].Master.Ingress.Name, err)
+		}
+	}
+
+	if err := cnf.nginxManager.Reload(); err != nil {
+		return fmt.Errorf("Error when reloading NGINX when updating App Protect Log Configuration: %v", err)
+	}
+
+	return nil
+}
+
+//DeleteApLogConf updates Ingresses that use AP Log Configuration after that policy is deleted
+func (cnf *Configurator) DeleteApLogConf(logConfNamespaceame string, ingExes []IngressEx, mergeableIngresses []MergeableIngresses) error {
+	fName := strings.Replace(logConfNamespaceame, "/", "_", 1)
+	logConfFileName := appProtectLogConfFolder + fName
+	cnf.nginxManager.DeleteApResourceFile(logConfFileName)
+
+	for i := range ingExes {
+		err := cnf.addOrUpdateIngress(&ingExes[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating ingress %v/%v: %v", ingExes[i].Ingress.Namespace, ingExes[i].Ingress.Name, err)
+		}
+	}
+
+	for i := range mergeableIngresses {
+		err := cnf.addOrUpdateMergeableIngress(&mergeableIngresses[i])
+		if err != nil {
+			return fmt.Errorf("Error adding or updating mergeableIngress %v/%v: %v", mergeableIngresses[i].Master.Ingress.Namespace, mergeableIngresses[i].Master.Ingress.Name, err)
+		}
+	}
+
+	if err := cnf.nginxManager.Reload(); err != nil {
+		return fmt.Errorf("Error when reloading NGINX when removing App Protect Log Configuration: %v", err)
+	}
+
+	return nil
 }
