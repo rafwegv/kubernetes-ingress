@@ -1637,13 +1637,15 @@ func (lbc *LoadBalancerController) createIngress(ing *extensions.Ingress) (*conf
 }
 
 func (lbc *LoadBalancerController) getApLogConfAndDst(ing *extensions.Ingress, apLogConfAnnotation string) (logConf *unstructured.Unstructured, logDst string) {
-	//DEBUG
-	//fmt.Printf("getApLogConfAndDst %s", apLogConfAnnotation)
+	logConfNsN := apLogConfAnnotation
+	if ! strings.Contains(apLogConfAnnotation, "/") {
+		logConfNsN = ing.Namespace + "/" + apLogConfAnnotation
+	}
 	if _, exists := ing.Annotations[configs.ApLogConfDstAnnotation]; ! exists {
 		glog.Warningf("Error: app-protect-security-log requires app-protect-security-log-destination in %v", ing.Name)
 		return nil, ""
 	}
-	lcNamespace, lcName, logDst, err := ValidateApLogConfAnnotations(apLogConfAnnotation, ing.Annotations[configs.ApLogConfDstAnnotation])
+	lcNamespace, lcName, logDst, err := ValidateApLogConfAnnotations(logConfNsN, ing.Annotations[configs.ApLogConfDstAnnotation])
 	if err != nil {
 		glog.Warningf("Error Validating App Protect Log Config for Ingress %v: %v", ing.Name, err)
 		return nil, ""
@@ -1663,7 +1665,11 @@ func (lbc *LoadBalancerController) getApLogConfAndDst(ing *extensions.Ingress, a
 }
 
 func (lbc *LoadBalancerController) getApPolicy(ing *extensions.Ingress, apPolicyAnnotation string) (apPolicy *unstructured.Unstructured) {
-	polNs, polN, err := ParseNamespaceName(apPolicyAnnotation)
+	polNsN := apPolicyAnnotation
+	if ! strings.Contains(apPolicyAnnotation, "/") {
+		polNsN = ing.Namespace + "/" + apPolicyAnnotation
+	}
+	polNs, polN, err := ParseNamespaceName(polNsN)
 	if err != nil {
 		glog.Warningf("Error parsing App Protect Policy name for Ingress %v: %v ", ing.Name, err)
 		return nil
@@ -2413,7 +2419,7 @@ func (lbc *LoadBalancerController) findIngressesForApPolicy(policyNamespace stri
 	for i := range ings {
 		anns := ings[i].GetAnnotations()
 		if pol, exists := anns[configs.ApPolicyAnnotation]; exists {
-			if pol == policyNamespace+"/"+policyName {
+			if (pol == policyNamespace + "/" + policyName || pol == policyName) {
 				apIngs = append(apIngs, ings[i])
 			}
 		}
@@ -2421,7 +2427,7 @@ func (lbc *LoadBalancerController) findIngressesForApPolicy(policyNamespace stri
 	for _, mIng := range mIngs {
 		anns := mIng.Master.Ingress.GetAnnotations()
 		if pol, exists := anns[configs.ApLogConfAnnotation]; exists {
-			if pol == policyNamespace+"/"+policyName {
+			if ( pol == policyNamespace + "/" + policyName || pol == policyName ) {
 				apIngs = append(apIngs, *mIng.Master.Ingress)
 			}
 		}
@@ -2434,7 +2440,7 @@ func (lbc *LoadBalancerController) findIngressesForApLogConf(logConfNamespace st
 	for i := range ings {
 		anns := ings[i].GetAnnotations()
 		if pol, exists := anns[configs.ApLogConfAnnotation]; exists {
-			if pol == logConfNamespace+"/"+logConfName {
+			if ( pol == logConfNamespace + "/" + logConfName || pol == logConfName ) {
 				apLCIngs = append(apLCIngs, ings[i])
 			}
 		}
@@ -2442,7 +2448,7 @@ func (lbc *LoadBalancerController) findIngressesForApLogConf(logConfNamespace st
 	for _, mIng := range mIngs {
 		anns := mIng.Master.Ingress.GetAnnotations()
 		if pol, exists := anns[configs.ApLogConfAnnotation]; exists {
-			if pol == logConfNamespace+"/"+logConfName {
+			if ( pol == logConfNamespace+"/"+logConfName || pol == logConfName ) {
 				apLCIngs = append(apLCIngs, *mIng.Master.Ingress)
 			}
 		}

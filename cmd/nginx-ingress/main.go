@@ -583,46 +583,21 @@ func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManag
 	
 	select {
 	case err := <-nginxDone:
-		if err != nil {
-			glog.Errorf("nginx command exited with an error: %v", err)
-			exitStatus = 1
-		} else {
-			glog.Info("nginx command exited successfully")
-		}
-		nginxManager.AppProtectPluginQuit()
-		nginxManager.AppProtectAgentQuit()
+		glog.Fatalf("nginx command exited unexpectedly with status: %v", err)
 	case err := <-pluginDone:
-		if err != nil {
-			glog.Errorf("AppProtectPlugin command exited with an error: %v", err)
-			exitStatus = 1
-		} else {
-			glog.Info("AppProtectPlugin command exited successfully")
-		}
-		nginxManager.AppProtectAgentQuit()
-		nginxManager.Terminate()
+		glog.Fatalf("AppProtectPlugin command exited unexpectedly with status: %v", err)
 	case err := <-agentDone:
-		if err != nil {
-			glog.Errorf("AppProtectAgent command exited with an error: %v", err)
-			exitStatus = 1
-		} else {
-			glog.Info("AppProtectAgent command exited successfully")
-		}
-		nginxManager.AppProtectPluginQuit()
-		nginxManager.Terminate()
+		glog.Fatalf("AppProtectAgent command exited unexpectedly with status: %v", err)
 	case <-signalChan:
 		glog.Infof("Received SIGTERM, shutting down")
+		lbc.Stop()
 		nginxManager.Quit()
+		<-nginxDone
 		nginxManager.AppProtectPluginQuit()
+		<-pluginDone
 		nginxManager.AppProtectAgentQuit()
+		<-agentDone
 	}
-
-	<-nginxDone
-	<-pluginDone
-	<-agentDone
-
-	glog.Infof("Shutting down the controller")
-	lbc.Stop()
-
 	glog.Infof("Exiting with a status: %v", exitStatus)
 	os.Exit(exitStatus)
 }

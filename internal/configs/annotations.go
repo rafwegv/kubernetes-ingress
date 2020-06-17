@@ -17,7 +17,7 @@ const ApPolicyAnnotation = "appprotect.f5.com/app-protect-policy"
 //ApLogConfAnnotation is where the NGINX AppProtect Log Configuration is specified
 const ApLogConfAnnotation = "appprotect.f5.com/app-protect-security-log"
 
-//ApLogConfAnnotation is where the NGINX AppProtect Log Configuration is specified
+//ApLogConfDstAnnotation is where the NGINX AppProtect Log Configuration is specified
 const ApLogConfDstAnnotation = "appprotect.f5.com/app-protect-security-log-destination"
 
 
