@@ -9,9 +9,10 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 	"k8s.io/client-go/tools/cache"
 
+	"fmt"
+
 	conf_v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"fmt"
 )
 
 var (
@@ -381,41 +382,41 @@ func createVirtualServerRouteHandlers(lbc *LoadBalancerController) cache.Resourc
 
 func createAppProtectPolicyHandlers(lbc *LoadBalancerController) cache.ResourceEventHandlerFuncs {
 	handlers := cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				pol := obj.(*unstructured.Unstructured)
-				glog.V(3).Infof("Adding AppProtectPolicy: %v", pol.GetName())
-				lbc.AddSyncQueue(pol)
-			},
-			UpdateFunc: func(oldObj, obj interface{}) {
-				oldPol := oldObj.(*unstructured.Unstructured)
-				newPol := obj.(*unstructured.Unstructured)
-				updated, err := compareSpecs(oldPol, newPol)
-				if err != nil {
-					glog.V(3).Infof("Error when comparing policy %v", err)
-				}
-				if updated {
-					glog.V(3).Infof("ApPolicy %v changed, syncing", oldPol.GetName())
-					lbc.AddSyncQueue(newPol)
-				}
-			},
-			DeleteFunc: func(obj interface{}) {
-				pol := obj.(*unstructured.Unstructured)
-				lbc.AddSyncQueue(pol)
-			},
+		AddFunc: func(obj interface{}) {
+			pol := obj.(*unstructured.Unstructured)
+			glog.V(3).Infof("Adding AppProtectPolicy: %v", pol.GetName())
+			lbc.AddSyncQueue(pol)
+		},
+		UpdateFunc: func(oldObj, obj interface{}) {
+			oldPol := oldObj.(*unstructured.Unstructured)
+			newPol := obj.(*unstructured.Unstructured)
+			updated, err := compareSpecs(oldPol, newPol)
+			if err != nil {
+				glog.V(3).Infof("Error when comparing policy %v", err)
+				lbc.AddSyncQueue(newPol)
+			}
+			if updated {
+				glog.V(3).Infof("ApPolicy %v changed, syncing", oldPol.GetName())
+				lbc.AddSyncQueue(newPol)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			lbc.AddSyncQueue(obj)
+		},
 	}
 	return handlers
-}	
+}
 
 func compareSpecs(oldresource, resource *unstructured.Unstructured) (bool, error) {
 	oldSpec, found, err := unstructured.NestedMap(oldresource.Object, "spec")
-	if ! found {
+	if !found {
 		glog.V(3).Infof("Warning, oldspec has unexpected format")
 	}
 	if err != nil {
 		return false, err
 	}
 	spec, found, err := unstructured.NestedMap(resource.Object, "spec")
-	if ! found {
+	if !found {
 		return false, fmt.Errorf("Error, spec has unexpected format")
 	}
 	if err != nil {
@@ -425,7 +426,7 @@ func compareSpecs(oldresource, resource *unstructured.Unstructured) (bool, error
 	if eq {
 		glog.V(3).Infof("New spec of %v same as old spec", oldresource.GetName())
 	}
-	return ! eq, nil
+	return !eq, nil
 }
 
 func createAppProtectLogConfHandlers(lbc *LoadBalancerController) cache.ResourceEventHandlerFuncs {
@@ -441,6 +442,7 @@ func createAppProtectLogConfHandlers(lbc *LoadBalancerController) cache.Resource
 			updated, err := compareSpecs(oldConf, newConf)
 			if err != nil {
 				glog.V(3).Infof("Error when comparing LogConfs %v", err)
+				lbc.AddSyncQueue(newConf)
 			}
 			if updated {
 				glog.V(3).Infof("ApLogConf %v changed, syncing", oldConf.GetName())
@@ -448,8 +450,7 @@ func createAppProtectLogConfHandlers(lbc *LoadBalancerController) cache.Resource
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			conf := obj.(*unstructured.Unstructured)
-			lbc.AddSyncQueue(conf)
+			lbc.AddSyncQueue(obj)
 		},
 	}
 	return handlers

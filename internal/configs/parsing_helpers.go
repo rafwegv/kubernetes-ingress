@@ -190,10 +190,7 @@ func ParseTime(s string) (string, error) {
 var threshEx = regexp.MustCompile(`high=([1-9]|[1-9][0-9]|100) low=([1-9]|[1-9][0-9]|100)\b`)
 var threshExR = regexp.MustCompile(`low=([1-9]|[1-9][0-9]|100) high=([1-9]|[1-9][0-9]|100)\b`)
 
-//VerifyThresholds ensures that threshold values are set correctly
-func VerifyThresholds(p string) bool {
-	if threshEx.MatchString(p) {
-		return true
-	} 
-	return threshExR.MatchString(p)
+//VerifyAppProtectThresholds ensures that threshold values are set correctly
+func VerifyAppProtectThresholds(p string) bool {
+	return threshEx.MatchString(p) || threshExR.MatchString(p)
 }

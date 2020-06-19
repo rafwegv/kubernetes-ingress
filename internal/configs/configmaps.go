@@ -423,36 +423,36 @@ func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool, hasAppProtect bool) *Con
 		}
 	}
 
-	if appProtectFailureModeAction, exists := cfgm.Data["app-protect-failure-mode-action"]; exists {
-		if appProtectFailureModeAction == "pass" || appProtectFailureModeAction == "drop" {
-		cfgParams.MainAppProtectFailureModeAction = appProtectFailureModeAction
-		} else {
-			glog.Error("ConfigMap Key 'app-protect-failure-mode-action' must have value 'pass' or 'drop'. Ignoring.")
-		}
-	}
-	
 	if hasAppProtect {
+
+		if appProtectFailureModeAction, exists := cfgm.Data["app-protect-failure-mode-action"]; exists {
+			if appProtectFailureModeAction == "pass" || appProtectFailureModeAction == "drop" {
+				cfgParams.MainAppProtectFailureModeAction = appProtectFailureModeAction
+			} else {
+				glog.Error("ConfigMap Key 'app-protect-failure-mode-action' must have value 'pass' or 'drop'. Ignoring.")
+			}
+		}
 
 		if appProtectCookieSeed, exists := cfgm.Data["app-protect-cookie-seed"]; exists {
 			cfgParams.MainAppProtectCookieSeed = appProtectCookieSeed
 		}
-		
+
 		if appProtectCPUThresholds, exists := cfgm.Data["app-protect-cpu-thresholds"]; exists {
-			if VerifyThresholds(appProtectCPUThresholds) {
-			cfgParams.MainAppProtectCPUThresholds = appProtectCPUThresholds
+			if VerifyAppProtectThresholds(appProtectCPUThresholds) {
+				cfgParams.MainAppProtectCPUThresholds = appProtectCPUThresholds
 			} else {
 				glog.Error("ConfigMap Key 'app-protect-cpu-thresholds' must follow pattern: 'high=<0 - 100> low=<0 - 100>'. Ignoring.")
 			}
 		}
-		
+
 		if appProtectPhysicalMemoryThresholds, exists := cfgm.Data["app-protect-physical-memory-util-thresholds"]; exists {
 			cfgParams.MainAppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
-			if VerifyThresholds(appProtectPhysicalMemoryThresholds) {
+			if VerifyAppProtectThresholds(appProtectPhysicalMemoryThresholds) {
 				cfgParams.MainAppProtectPhysicalMemoryThresholds = appProtectPhysicalMemoryThresholds
-				} else {
-					glog.Error("ConfigMap Key 'app-protect-physical-memory-thresholds' must follow pattern: 'high=<0 - 100> low=<0 - 100>'. Ignoring.")
-				}	
-		}	
+			} else {
+				glog.Error("ConfigMap Key 'app-protect-physical-memory-thresholds' must follow pattern: 'high=<0 - 100> low=<0 - 100>'. Ignoring.")
+			}
+		}
 	}
 
 	return cfgParams
@@ -461,49 +461,49 @@ func ParseConfigMap(cfgm *v1.ConfigMap, nginxPlus bool, hasAppProtect bool) *Con
 // GenerateNginxMainConfig generates MainConfig.
 func GenerateNginxMainConfig(staticCfgParams *StaticConfigParams, config *ConfigParams) *version1.MainConfig {
 	nginxCfg := &version1.MainConfig{
-		HealthStatus:                   staticCfgParams.HealthStatus,
-		HealthStatusURI:                staticCfgParams.HealthStatusURI,
-		NginxStatus:                    staticCfgParams.NginxStatus,
-		NginxStatusAllowCIDRs:          staticCfgParams.NginxStatusAllowCIDRs,
-		NginxStatusPort:                staticCfgParams.NginxStatusPort,
-		StubStatusOverUnixSocketForOSS: staticCfgParams.StubStatusOverUnixSocketForOSS,
-		MainSnippets:                   config.MainMainSnippets,
-		HTTPSnippets:                   config.MainHTTPSnippets,
-		StreamSnippets:                 config.MainStreamSnippets,
-		ServerNamesHashBucketSize:      config.MainServerNamesHashBucketSize,
-		ServerNamesHashMaxSize:         config.MainServerNamesHashMaxSize,
-		AccessLogOff:                   config.MainAccessLogOff,
-		LogFormat:                      config.MainLogFormat,
-		ErrorLogLevel:                  config.MainErrorLogLevel,
-		StreamLogFormat:                config.MainStreamLogFormat,
-		SSLProtocols:                   config.MainServerSSLProtocols,
-		SSLCiphers:                     config.MainServerSSLCiphers,
-		SSLDHParam:                     config.MainServerSSLDHParam,
-		SSLPreferServerCiphers:         config.MainServerSSLPreferServerCiphers,
-		HTTP2:                          config.HTTP2,
-		ServerTokens:                   config.ServerTokens,
-		ProxyProtocol:                  config.ProxyProtocol,
-		WorkerProcesses:                config.MainWorkerProcesses,
-		WorkerCPUAffinity:              config.MainWorkerCPUAffinity,
-		WorkerShutdownTimeout:          config.MainWorkerShutdownTimeout,
-		WorkerConnections:              config.MainWorkerConnections,
-		WorkerRlimitNofile:             config.MainWorkerRlimitNofile,
-		ResolverAddresses:              config.ResolverAddresses,
-		ResolverIPV6:                   config.ResolverIPV6,
-		ResolverValid:                  config.ResolverValid,
-		ResolverTimeout:                config.ResolverTimeout,
-		KeepaliveTimeout:               config.MainKeepaliveTimeout,
-		KeepaliveRequests:              config.MainKeepaliveRequests,
-		VariablesHashBucketSize:        config.VariablesHashBucketSize,
-		VariablesHashMaxSize:           config.VariablesHashMaxSize,
-		OpenTracingLoadModule:          config.MainOpenTracingLoadModule,
-		OpenTracingEnabled:             config.MainOpenTracingEnabled,
-		OpenTracingTracer:              config.MainOpenTracingTracer,
-		OpenTracingTracerConfig:        config.MainOpenTracingTracerConfig,
-		AppProtectLoadModule:           staticCfgParams.MainAppProtectLoadModule,
-		AppProtectFailureModeAction:    config.MainAppProtectFailureModeAction,
-		AppProtectCookieSeed:           config.MainAppProtectCookieSeed,
-		AppProtectCPUThresholds:        config.MainAppProtectCPUThresholds,
+		HealthStatus:                       staticCfgParams.HealthStatus,
+		HealthStatusURI:                    staticCfgParams.HealthStatusURI,
+		NginxStatus:                        staticCfgParams.NginxStatus,
+		NginxStatusAllowCIDRs:              staticCfgParams.NginxStatusAllowCIDRs,
+		NginxStatusPort:                    staticCfgParams.NginxStatusPort,
+		StubStatusOverUnixSocketForOSS:     staticCfgParams.StubStatusOverUnixSocketForOSS,
+		MainSnippets:                       config.MainMainSnippets,
+		HTTPSnippets:                       config.MainHTTPSnippets,
+		StreamSnippets:                     config.MainStreamSnippets,
+		ServerNamesHashBucketSize:          config.MainServerNamesHashBucketSize,
+		ServerNamesHashMaxSize:             config.MainServerNamesHashMaxSize,
+		AccessLogOff:                       config.MainAccessLogOff,
+		LogFormat:                          config.MainLogFormat,
+		ErrorLogLevel:                      config.MainErrorLogLevel,
+		StreamLogFormat:                    config.MainStreamLogFormat,
+		SSLProtocols:                       config.MainServerSSLProtocols,
+		SSLCiphers:                         config.MainServerSSLCiphers,
+		SSLDHParam:                         config.MainServerSSLDHParam,
+		SSLPreferServerCiphers:             config.MainServerSSLPreferServerCiphers,
+		HTTP2:                              config.HTTP2,
+		ServerTokens:                       config.ServerTokens,
+		ProxyProtocol:                      config.ProxyProtocol,
+		WorkerProcesses:                    config.MainWorkerProcesses,
+		WorkerCPUAffinity:                  config.MainWorkerCPUAffinity,
+		WorkerShutdownTimeout:              config.MainWorkerShutdownTimeout,
+		WorkerConnections:                  config.MainWorkerConnections,
+		WorkerRlimitNofile:                 config.MainWorkerRlimitNofile,
+		ResolverAddresses:                  config.ResolverAddresses,
+		ResolverIPV6:                       config.ResolverIPV6,
+		ResolverValid:                      config.ResolverValid,
+		ResolverTimeout:                    config.ResolverTimeout,
+		KeepaliveTimeout:                   config.MainKeepaliveTimeout,
+		KeepaliveRequests:                  config.MainKeepaliveRequests,
+		VariablesHashBucketSize:            config.VariablesHashBucketSize,
+		VariablesHashMaxSize:               config.VariablesHashMaxSize,
+		OpenTracingLoadModule:              config.MainOpenTracingLoadModule,
+		OpenTracingEnabled:                 config.MainOpenTracingEnabled,
+		OpenTracingTracer:                  config.MainOpenTracingTracer,
+		OpenTracingTracerConfig:            config.MainOpenTracingTracerConfig,
+		AppProtectLoadModule:               staticCfgParams.MainAppProtectLoadModule,
+		AppProtectFailureModeAction:        config.MainAppProtectFailureModeAction,
+		AppProtectCookieSeed:               config.MainAppProtectCookieSeed,
+		AppProtectCPUThresholds:            config.MainAppProtectCPUThresholds,
 		AppProtectPhysicalMemoryThresholds: config.MainAppProtectPhysicalMemoryThresholds,
 	}
 	return nginxCfg

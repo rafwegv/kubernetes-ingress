@@ -9,4 +9,4 @@ spec:
     max_message_size: 64k
     max_request_size: any
   filter: 
-    request_types: all
+    request_type: all

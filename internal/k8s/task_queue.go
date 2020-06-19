@@ -7,8 +7,8 @@ import (
 	"github.com/golang/glog"
 	conf_v1 "github.com/nginxinc/kubernetes-ingress/pkg/apis/configuration/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
 )
@@ -152,7 +152,7 @@ func newTask(key string, obj interface{}) (task, error) {
 		if objectKind := obj.(*unstructured.Unstructured).GetKind(); objectKind == appProtectPolicyGVK.Kind {
 			k = appProtectPolicy
 		} else if objectKind == appProtectLogConfGVK.Kind {
-            k = appProtectLogConf
+			k = appProtectLogConf
 		} else {
 			return task{}, fmt.Errorf("Unknow unstructured kind: %v", objectKind)
 		}

@@ -43,15 +43,14 @@ type Manager interface {
 	DeleteConfig(name string)
 	CreateSecret(name string, content []byte, mode os.FileMode) string
 	DeleteSecret(name string)
-	CreateApResourceFile(name string, content []byte) error
-	DeleteApResourceFile(name string)
+	CreateAppProtectResourceFile(name string, content []byte) error
+	DeleteAppProtectResourceFile(name string)
 	GetFilenameForSecret(name string) string
 	CreateDHParam(content string) (string, error)
 	CreateOpenTracingTracerConfig(content string) error
 	Start(done chan error)
 	Reload() error
 	Quit()
-	Terminate()
 	UpdateConfigVersionFile(openTracing bool)
 	SetPlusClients(plusClient *client.NginxClient, plusConfigVersionCheckClient *http.Client)
 	UpdateServersInPlus(upstream string, servers []string, config ServerConfig) error
@@ -196,13 +195,18 @@ func (lm *LocalManager) CreateDHParam(content string) (string, error) {
 	return lm.dhparamFilename, nil
 }
 
-//CreateApResourceFile writes contents of An App Protect resource to a file
-func (lm *LocalManager) CreateApResourceFile(name string, content []byte) error {
-	return createFileAndWrite(name, content)
+//CreateAppProtectResourceFile writes contents of An App Protect resource to a file
+func (lm *LocalManager) CreateAppProtectResourceFile(name string, content []byte) error {
+	glog.V(3).Infof("Writing App Protect Resource to %v", name)
+	err := createFileAndWrite(name, content)
+	if err != nil {
+		glog.Fatalf("Failed to write App Protect Resource to %v: %v", name, err)
+	}
+	return nil
 }
 
-//DeleteApResourceFile removes an App Protect policy file from storage
-func (lm *LocalManager) DeleteApResourceFile(name string) {
+//DeleteAppProtectResourceFile removes an App Protect policy file from storage
+func (lm *LocalManager) DeleteAppProtectResourceFile(name string) {
 	if err := os.Remove(name); err != nil {
 		glog.Warningf("Failed to delete App Protect Resource from %v: %v", name, err)
 	}
@@ -262,15 +266,6 @@ func (lm *LocalManager) Quit() {
 
 	if err := shellOut(lm.quitCmd); err != nil {
 		glog.Fatalf("Failed to quit nginx: %v", err)
-	}
-}
-
-// Terminate kills nginx with a SIGKILL
-func (lm *LocalManager) Terminate() {
-	glog.V(3).Info("Quitting nginx")
-	terminateCmd := fmt.Sprintf("kill -9 %d", lm.nginxPid)
-	if err := shellOut(terminateCmd); err != nil {
-		glog.Fatalf("Failed to terminate nginx: %v", err)
 	}
 }
 

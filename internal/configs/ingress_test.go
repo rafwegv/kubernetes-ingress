@@ -66,7 +66,7 @@ func TestGenerateNginxCfgForJWT(t *testing.T) {
 
 	apRes := make(map[string]string)
 
-	result := generateNginxCfg(&cafeIngressEx, pems, apRes, false, configParams, true,  true, false, "/etc/nginx/secrets/default-cafe-jwk")
+	result := generateNginxCfg(&cafeIngressEx, pems, apRes, false, configParams, true, true, false, "/etc/nginx/secrets/default-cafe-jwk")
 
 	if !reflect.DeepEqual(result.Servers[0].JWTAuth, expected.Servers[0].JWTAuth) {
 		t.Errorf("generateNginxCfg returned \n%v,  but expected \n%v", result.Servers[0].JWTAuth, expected.Servers[0].JWTAuth)
@@ -347,9 +347,9 @@ func TestGenerateNginxCfgForMergeableIngressesForJWT(t *testing.T) {
 	configParams := NewDefaultConfigParams()
 	isPlus := true
 
-	dummyApRes := make(map[string]string)
+	masterApRes := make(map[string]string)
 
-	result := generateNginxCfgForMergeableIngresses(mergeableIngresses, masterPems, dummyApRes, "/etc/nginx/secrets/default-cafe-jwk", minionJwtKeyFileNames, configParams, isPlus, false, false)
+	result := generateNginxCfgForMergeableIngresses(mergeableIngresses, masterPems, masterApRes, "/etc/nginx/secrets/default-cafe-jwk", minionJwtKeyFileNames, configParams, isPlus, false, false)
 
 	if !reflect.DeepEqual(result.Servers[0].JWTAuth, expected.Servers[0].JWTAuth) {
 		t.Errorf("generateNginxCfgForMergeableIngresses returned \n%v,  but expected \n%v", result.Servers[0].JWTAuth, expected.Servers[0].JWTAuth)

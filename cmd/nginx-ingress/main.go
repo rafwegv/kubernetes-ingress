@@ -37,6 +37,8 @@ import (
 )
 
 var (
+	dynClient dynamic.Interface
+
 	// Set during build
 	version   string
 	gitCommit string
@@ -169,13 +171,12 @@ func main() {
 		glog.Fatalf(`Invalid value for nginx-status-allow-cidrs: %v`, err)
 	}
 
-	if (*appProtect && ! *nginxPlus) {
+	if *appProtect && !*nginxPlus {
 		glog.Fatal("NGINX App Protect support is for NGINX Plus only")
 	}
-	
+
 	glog.Infof("Starting NGINX Ingress controller Version=%v GitCommit=%v\n", version, gitCommit)
 
-	
 	var config *rest.Config
 	if *proxyURL != "" {
 		config, err = clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -198,11 +199,13 @@ func main() {
 	if err != nil {
 		glog.Fatalf("Failed to create client: %v.", err)
 	}
-	dynClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		glog.Fatalf("Failed to create dynamic client: %v.", err)
-	}
 
+	if *appProtect {
+		dynClient, err = dynamic.NewForConfig(config)
+		if err != nil {
+			glog.Fatalf("Failed to create dynamic client: %v.", err)
+		}
+	}
 	var confClient k8s_nginx.Interface
 	if *enableCustomResources {
 		confClient, err = k8s_nginx.NewForConfig(config)
@@ -403,7 +406,7 @@ func main() {
 			go metrics.RunPrometheusListenerForNginx(*prometheusMetricsListenPort, client, registry)
 		}
 	}
-	
+
 	isWildcardEnabled := *wildcardTLSSecret != ""
 	cnf := configs.NewConfigurator(nginxManager, staticCfgParams, cfgParams, templateExecutor, templateExecutorV2, *nginxPlus, isWildcardEnabled)
 	controllerNamespace := os.Getenv("POD_NAMESPACE")
@@ -411,6 +414,7 @@ func main() {
 	lbcInput := k8s.NewLoadBalancerControllerInput{
 		KubeClient:                kubeClient,
 		ConfClient:                confClient,
+		DynClient:                 dynClient,
 		ResyncPeriod:              30 * time.Second,
 		Namespace:                 *watchNamespace,
 		NginxConfigurator:         cnf,
@@ -428,10 +432,6 @@ func main() {
 		ConfigMaps:                *nginxConfigMaps,
 		AreCustomResourcesEnabled: *enableCustomResources,
 		MetricsCollector:          controllerCollector,
-	}
-
-	if *appProtect {
-		lbcInput.DynClient = dynClient
 	}
 
 	lbc := k8s.NewLoadBalancerController(lbcInput)
@@ -579,8 +579,6 @@ func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManag
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
 
-	exitStatus := 0
-	
 	select {
 	case err := <-nginxDone:
 		glog.Fatalf("nginx command exited unexpectedly with status: %v", err)
@@ -598,6 +596,6 @@ func handleTerminationWithAppProtect(lbc *k8s.LoadBalancerController, nginxManag
 		nginxManager.AppProtectAgentQuit()
 		<-agentDone
 	}
-	glog.Infof("Exiting with a status: %v", exitStatus)
-	os.Exit(exitStatus)
+	glog.Info("Exiting successfully")
+	os.Exit(0)
 }

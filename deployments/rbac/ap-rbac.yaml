@@ -6,8 +6,8 @@ rules:
 - apiGroups: 
   - appprotect.f5.com
   resources: 
-  - "appolicies"
-  - "aplogconfs"
+  - appolicies
+  - aplogconfs
   verbs: 
   - "get" 
   - "watch" 

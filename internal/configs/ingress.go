@@ -2,7 +2,6 @@ package configs
 
 import (
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -14,20 +13,20 @@ import (
 )
 
 const emptyHost = ""
-const apPolicyKey = "policy"
-const apLogConfKey = "logconf"
+const appProtectPolicyKey = "policy"
+const appProtectLogConfKey = "logconf"
 
 // IngressEx holds an Ingress along with the resources that are referenced in this Ingress.
 type IngressEx struct {
-	Ingress          *extensions.Ingress
-	TLSSecrets       map[string]*api_v1.Secret
-	JWTKey           JWTKey
-	Endpoints        map[string][]string
-	HealthChecks     map[string]*api_v1.Probe
-	ExternalNameSvcs map[string]bool
-	ApPolicy         *unstructured.Unstructured
-	ApLogConf        *unstructured.Unstructured
-	ApLogDst		 string
+	Ingress           *extensions.Ingress
+	TLSSecrets        map[string]*api_v1.Secret
+	JWTKey            JWTKey
+	Endpoints         map[string][]string
+	HealthChecks      map[string]*api_v1.Probe
+	ExternalNameSvcs  map[string]bool
+	AppProtectPolicy  *unstructured.Unstructured
+	AppProtectLogConf *unstructured.Unstructured
+	AppProtectLogDst  string
 }
 
 // JWTKey represents a secret that holds JSON Web Key.
@@ -50,7 +49,7 @@ type MergeableIngresses struct {
 	Minions []*IngressEx
 }
 
-func generateNginxCfg(ingEx *IngressEx, pems map[string]string, apResources map[string]string , isMinion bool, baseCfgParams *ConfigParams, isPlus bool, hasAppProtect bool, isResolverConfigured bool, jwtKeyFileName string) version1.IngressNginxConfig {
+func generateNginxCfg(ingEx *IngressEx, pems map[string]string, apResources map[string]string, isMinion bool, baseCfgParams *ConfigParams, isPlus bool, hasAppProtect bool, isResolverConfigured bool, jwtKeyFileName string) version1.IngressNginxConfig {
 	cfgParams := parseAnnotations(ingEx, baseCfgParams, isPlus, hasAppProtect)
 	wsServices := getWebsocketServices(ingEx)
 	spServices := getSessionPersistenceServices(ingEx)
@@ -125,8 +124,8 @@ func generateNginxCfg(ingEx *IngressEx, pems map[string]string, apResources map[
 		}
 
 		if hasAppProtect {
-			server.AppProtectPolicy = apResources[apPolicyKey]
-			server.AppProtectLogConf = apResources[apLogConfKey]
+			server.AppProtectPolicy = apResources[appProtectPolicyKey]
+			server.AppProtectLogConf = apResources[appProtectLogConfKey]
 		}
 
 		if !isMinion && ingEx.JWTKey.Name != "" {
@@ -445,26 +444,4 @@ func generateNginxCfgForMergeableIngresses(mergeableIngs *MergeableIngresses, ma
 		Keepalive: keepalive,
 		Ingress:   masterNginxCfg.Ingress,
 	}
-}
-
-func aPResourcesReferencedButNotReady(servers []version1.Server) []string {
-	output := []string{}
-	for _, server := range servers {
-		if policy := server.AppProtectPolicy; policy != "" {
-			policyFile := strings.Replace(policy, "/", "_", 1)
-			_, err := os.Stat(appProtectPolicyFolder + policyFile)
-			if os.IsNotExist(err) {
-				output = append(output, policyFile)
-			}
-		}
-		if logConf := server.AppProtectLogConf; logConf != "" {
-			entireLogConfValue := strings.Replace(logConf, "/", "_", 1)
-			logConfFile := strings.Fields(entireLogConfValue)[0]
-			_, err := os.Stat(appProtectLogConfFolder + logConfFile)
-			if os.IsNotExist(err) {
-				output = append(output, logConfFile)
-			}
-		}
-	}
-	return output
 }

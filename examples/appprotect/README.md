@@ -30,7 +30,7 @@ $ kubectl create -f cafe.yaml
     ```
     $ kubectl create -f cafe-secret.yaml
     ```
-2. Create the App-Protect policy and log configuration:
+2. Create the App Protect policy and log configuration:
     ```
     kubectl create -f dataguard-alarm.yaml
     kubectl create -f logconf.yaml
